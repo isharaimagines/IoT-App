@@ -1,28 +1,23 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:http/http.dart' as http;
 import 'package:iot_app/components/device_config_page.dart';
 import 'package:iot_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:http/http.dart' as http;
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  final _ssidController = TextEditingController();
-  final _passController = TextEditingController();
+class _ProfilePageState extends State<ProfilePage> {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
-  String _status = "";
 
   Future<void> resetESP32() async {
-    setState(() => _status = "Sending reset...");
-    final url = Uri.parse('http://192.168.8.105/rest');
+    final url = Uri.parse('http://192.168.8.105/reset');
 
     try {
       final response = await http.get(
@@ -40,7 +35,7 @@ class _HomePageState extends State<HomePage> {
           ),
         );
 
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 1));
 
         Navigator.pushReplacement(
           context,
@@ -58,13 +53,6 @@ class _HomePageState extends State<HomePage> {
         SnackBar(content: Text('Error checking status: $e')),
       );
     }
-  }
-
-  @override
-  void dispose() {
-    _ssidController.dispose();
-    _passController.dispose();
-    super.dispose();
   }
 
   Future<void> _confirmLogout() async {
@@ -108,7 +96,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("ESP32-CAM WiFi Setup"),
+        title: const Text("Settings"),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [

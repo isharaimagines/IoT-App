@@ -58,7 +58,6 @@ class AuthWrapper extends StatelessWidget {
                 return MainPage();
               } else {
                 return DeviceSetupPage();
-                // return MainPage();
               }
             },
           );

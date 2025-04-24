@@ -1,8 +1,7 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:app_settings/app_settings.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:iot_app/main.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -18,20 +17,14 @@ class DeviceSetupPage extends StatefulWidget {
 }
 
 class _DeviceSetupPageState extends State<DeviceSetupPage> {
-  bool _isConnectedToESP = false;
   bool _isChecking = false;
-  bool _hasAutoNavigated = false; // Add this flag
   bool _obscurePassword = true;
   final NetworkInfo _networkInfo = NetworkInfo();
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
   final _ssidController = TextEditingController();
   final _passController = TextEditingController();
   List<WiFiAccessPoint> _availableNetworks = [];
   bool _isLoading = false;
   String? _selectedSSID;
-
-  bool _isConnecting = false;
-  String _status = "";
 
   Future<void> _checkPermissionsAndScan() async {
     setState(() => _isLoading = true);
@@ -77,79 +70,82 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
   Future<void> _sendWiFiCredentials() async {
     final ssid = _ssidController.text.trim();
     final password = _passController.text.trim();
-    final url = Uri.parse('http://192.168.4.1/config');
 
-    setState(() => _isChecking = true);
+// Get current user UID
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+    final uid = user.uid;
+
+    // URL encode parameters
+    final encodedSsid = Uri.encodeComponent(ssid);
+    final encodedPassword = Uri.encodeComponent(password);
+    final encodedUid = Uri.encodeComponent(uid);
+
+    final url = Uri.parse(
+        'http://192.168.4.1/config?ssid=$encodedSsid&password=$encodedPassword&useruid=$encodedUid');
+
+    if (ssid.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter both SSID and password.')),
+      );
+      return;
+    }
+
     try {
+      // Verify we're still connected to ESP32 network
       final wifiName = await _networkInfo.getWifiName();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isConnectedToESP = wifiName == '"ESP32-CAM-SETUP"';
-        _isChecking = false;
-      });
+      final isConnected = wifiName?.replaceAll('"', '') == 'ESP32-CAM-SETUP';
 
-      // Auto-navigate if connected
-      if (_isConnectedToESP && !_isChecking && mounted) {
-        _hasAutoNavigated = true;
+      if (!mounted) return;
+      if (!isConnected) {
+        throw Exception('Not connected to ESP32-CAM-SETUP network');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Errorz: ${e.toString()}")),
+      );
+    }
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      );
+
+      if (response.statusCode == 200) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('deviceConfigured', true);
+        // Handle success - maybe navigate to new screen
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configured...'),
+            duration: Duration(seconds: 2), // Show for 2 seconds
+          ),
+        );
+
+        await Future.delayed(const Duration(seconds: 1));
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => const MainPage(),
           ),
         );
-      }
-    } on PlatformException catch (e) {
-      if (!mounted) return;
-      setState(() => _isChecking = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error checking WiFi: ${e.message}')),
-      );
-
-      return;
-    }
-
-    if (ssid.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please enter both SSID and password.')),
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Configuring IoT Device...')),
-    );
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {'ssid': ssid, 'password': password},
-      );
-
-      if (response.statusCode == 200) {
-        // Mark device as configured
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('deviceConfigured', true);
-
-        setState(() {
-          _isConnecting = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Configuring! IoT Device will reboot.')),
-        );
-        _isConnecting = true;
       } else {
-        setState(() {
-          _status = "ESP32 error: ${response.body}";
-        });
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
+      print('Error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send config: $e')),
+        SnackBar(content: Text('Errora: ${e.toString()}')),
       );
+      rethrow;
     }
   }
 
@@ -160,7 +156,6 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
     super.dispose();
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     return Scaffold(
