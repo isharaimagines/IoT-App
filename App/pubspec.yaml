@@ -45,6 +45,8 @@ dependencies:
   google_sign_in: ^6.3.0
   shared_preferences: ^2.5.3
   network_info_plus: ^6.1.4
+  multicast_dns: ^0.3.3
+  network_tools: ^3.2.7
 
 dev_dependencies:
   flutter_test:

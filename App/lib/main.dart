@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: AuthWrapper(),
+      home: const AuthWrapper(),
     );
   }
 }
@@ -40,25 +40,19 @@ class AuthWrapper extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+          return const LoadingScreen();
         }
 
-        if (snapshot.hasData && snapshot.data != null) {
-          // Check if ESP32-CAM is configured
+        if (snapshot.hasData) {
           return FutureBuilder<bool>(
             future: _isDeviceConfigured(),
             builder: (context, configSnapshot) {
               if (configSnapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()));
+                return const LoadingScreen();
               }
-
-              if (configSnapshot.data == true) {
-                return MainPage();
-              } else {
-                return DeviceSetupPage();
-              }
+              return configSnapshot.data == true
+                  ? const MainPage()
+                  : const DeviceSetupPage();
             },
           );
         }
@@ -74,51 +68,76 @@ class AuthWrapper extends StatelessWidget {
   }
 }
 
-// Your existing MainPage and _MainPageState classes remain the same
+class LoadingScreen extends StatelessWidget {
+  const LoadingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
 
   @override
-  _MainPageState createState() => _MainPageState();
+  State<MainPage> createState() => _MainPageState();
 }
 
 class _MainPageState extends State<MainPage> {
-  int index = 0;
+  int _currentIndex = 0;
+  static const _navBarTheme = NavigationBarThemeData(
+    indicatorColor: Color.fromARGB(255, 200, 230, 201),
+    labelTextStyle: WidgetStatePropertyAll(
+      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+    ),
+  );
 
-  final screens = [HomePage(), ChatPage(), MoodPage(), ProfilePage()];
+  static const _destinations = [
+    NavigationDestination(
+      icon: Icon(Icons.today_outlined),
+      selectedIcon: Icon(Icons.today),
+      label: 'Today',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.chat_bubble_outline),
+      selectedIcon: Icon(Icons.chat),
+      label: 'Chat',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.analytics_outlined),
+      selectedIcon: Icon(Icons.analytics),
+      label: 'Memories',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings),
+      label: 'Settings',
+    ),
+  ];
+
+  final List<Widget> _screens = const [
+    HomePage(),
+    ChatPage(),
+    MoodPage(),
+    ProfilePage(),
+  ];
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-      body: screens[index],
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
       bottomNavigationBar: NavigationBarTheme(
-          data: NavigationBarThemeData(
-              indicatorColor: Colors.green.shade100,
-              labelTextStyle: WidgetStateProperty.all(
-                  TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-          child: NavigationBar(
-              selectedIndex: index,
-              onDestinationSelected: (index) =>
-                  setState(() => this.index = index),
-              destinations: [
-                NavigationDestination(
-                  icon: Icon(Icons.today_outlined),
-                  selectedIcon: Icon(Icons.today),
-                  label: "Today",
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.chat_bubble_outline),
-                  selectedIcon: Icon(Icons.chat),
-                  label: "Chat",
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.analytics_outlined),
-                  selectedIcon: Icon(Icons.analytics),
-                  label: "Memories",
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  selectedIcon: Icon(Icons.settings),
-                  label: "Setting",
-                ),
-              ])));
+        data: _navBarTheme,
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) =>
+              setState(() => _currentIndex = index),
+          destinations: _destinations,
+        ),
+      ),
+    );
+  }
 }

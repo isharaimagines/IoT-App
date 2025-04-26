@@ -29,8 +29,11 @@ class SignInPage extends StatelessWidget {
       await prefs.setBool('isLoggedIn', true);
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign in failed: $error')),
+        SnackBar(
+            content: Text(
+                'Sign in failed. Please connect to the Internet to continue.')),
       );
+      return;
     }
   }
 

@@ -74,7 +74,7 @@ void writeEEPROM(int start, const String &data) {
   for (int i = 0; i < data.length(); i++) {
     EEPROM.write(start + i, data[i]);
   }
-  EEPROM.write(start + data.length(), 0); // null terminator
+  EEPROM.write(start + data.length(), 0);
   EEPROM.commit();
 }
 
@@ -89,13 +89,14 @@ void connectToWiFi(const String &ssid, const String &pass) {
   Serial.println("WiFi connected..!");
   
   // Initialize mDNS
-  if (!MDNS.begin("esp32")) {   // Set the hostname to "esp32.local"
+  if (!MDNS.begin("esp32device")) {   // Set the hostname to "esp32device.local"
     Serial.println("Error setting up MDNS responder!");
-    while(1) {
+    while (1) {
       delay(1000);
     }
   }
-  Serial.println("mDNS responder started");
+  Serial.println("mDNS responder started\n");
+  MDNS.addService("esp32service", "tcp", 80);
 }
 
 void handleReset() {
@@ -136,9 +137,7 @@ void handleConfig() {
 void handleStatus() {
   String response;
   if (WiFi.status() == WL_CONNECTED) {
-    response += "Connected: true\n";
-    response += "SSID: " + WiFi.SSID() + "\n";
-    response += "IP: " + WiFi.localIP().toString() + "\n";
+    response += WiFi.localIP().toString();
   } else {
     response += "Connected: false\n";
     response += "SSID: " + readEEPROM(WIFI_SSID_ADDR, 32) + "\n";
@@ -146,6 +145,28 @@ void handleStatus() {
   }
 
   server.send(200, "text/plain", response);
+}
+
+void handleCapture() {
+server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET");
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.sendHeader("Pragma", "no-cache");
+  server.sendHeader("Expires", "0");
+  
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb) {
+    server.send(500, "text/plain", "Camera error");
+    return;
+  }
+  
+  server.send_P(200, "image/jpeg", (const char*)fb->buf, fb->len);
+  esp_camera_fb_return(fb);
+}
+
+void sendErrorResponse(const String& message) {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(500, "text/plain", message);
 }
 
 void setup() {
@@ -190,18 +211,9 @@ void setup() {
 
   if (!ssid.isEmpty()) {
     connectToWiFi(ssid, pass); 
-    server.on("/capture", HTTP_GET, []() {
-      camera_fb_t * fb = esp_camera_fb_get();
-      if (!fb) {
-        server.send(500, "text/plain", "Camera fail");
-        return;
-      }
-      server.send_P(200, "image/jpeg", (const char*)fb->buf, fb->len);
-      esp_camera_fb_return(fb);
-    });
-
+    server.on("/getstatus", HTTP_GET, handleStatus);
+    server.on("/capture", HTTP_GET, handleCapture);
     server.on("/reset", HTTP_GET, handleReset);
-
 
   } else {
     WiFi.mode(WIFI_AP);
@@ -209,9 +221,12 @@ void setup() {
     server.on("/config", HTTP_GET, handleConfig);
 
   }
-    server.begin();
+  
+  server.begin();
+  Serial.println("HTTP server started");
 }
 
 void loop() {
   server.handleClient();
+  delay(1);
 }
