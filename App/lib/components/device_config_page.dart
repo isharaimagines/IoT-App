@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:http/io_client.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:iot_app/main.dart';
 import 'package:network_info_plus/network_info_plus.dart';
@@ -25,6 +27,8 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
   List<WiFiAccessPoint> _availableNetworks = [];
   bool _isLoading = false;
   String? _selectedSSID;
+  late http.Client _client;
+  String idToken = "";
 
   Future<void> _checkPermissionsAndScan() async {
     setState(() => _isLoading = true);
@@ -67,11 +71,14 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
     }
   }
 
-  Future<void> _sendWiFiCredentials() async {
-    final ssid = _ssidController.text.trim();
-    final password = _passController.text.trim();
+  @override
+  void initState() {
+    super.initState();
+    _initHttpClient();
+    _initidTokens();
+  }
 
-// Get current user UID
+  Future<void> _initidTokens() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,15 +86,42 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
       );
       return;
     }
-    final uid = user.uid;
 
-    // URL encode parameters
+    final _idTokens = await user.getIdToken();
+
+    setState(() => idToken = _idTokens!);
+  }
+
+  Future<void> _initHttpClient() async {
+    final httpClient = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..autoUncompress = false;
+
+    _client = IOClient(httpClient);
+  }
+
+  Future<void> _sendWiFiCredentials() async {
+    final ssid = _ssidController.text.trim();
+    final password = _passController.text.trim();
     final encodedSsid = Uri.encodeComponent(ssid);
     final encodedPassword = Uri.encodeComponent(password);
+
+    // Get current user UID
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+
+    final uid = user.uid;
     final encodedUid = Uri.encodeComponent(uid);
 
-    final url = Uri.parse(
-        'http://192.168.4.1/config?ssid=$encodedSsid&password=$encodedPassword&useruid=$encodedUid');
+    final encodedidToken = Uri.encodeComponent(idToken);
+
+    debugPrint(idToken);
+    debugPrint(encodedidToken);
 
     if (ssid.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,34 +146,31 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
     }
 
     try {
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      final uri = Uri.parse(
+          'http://192.168.4.1/config-100?ssid=$encodedSsid&password=$encodedPassword&useruid=$encodedUid&idtoken=$encodedidToken');
+      final response = await _client.get(uri);
+
+      // Validate response
+      if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+        throw Exception('Invalid image response');
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('deviceConfigured', true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Configured...'),
+          duration: Duration(seconds: 2),
+        ),
       );
 
-      if (response.statusCode == 200) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('deviceConfigured', true);
-        // Handle success - maybe navigate to new screen
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Configured...'),
-            duration: Duration(seconds: 2), // Show for 2 seconds
-          ),
-        );
-
-        await Future.delayed(const Duration(seconds: 1));
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const MainPage(),
-          ),
-        );
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MainPage(),
+        ),
+      );
     } catch (e) {
       print('Error: $e');
       ScaffoldMessenger.of(context).showSnackBar(

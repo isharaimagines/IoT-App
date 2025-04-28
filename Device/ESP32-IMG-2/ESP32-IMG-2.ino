@@ -4,9 +4,9 @@
 #include "esp_camera.h"
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
-#include <ESPmDNS.h>
+#include <HTTPClient.h>
 
-#define EEPROM_SIZE 140  // Increased to accommodate all data safely
+#define EEPROM_SIZE 140  // accommodate all data safely
 #define WIFI_SSID_ADDR 0
 #define WIFI_SSID_LEN 32
 #define WIFI_PASS_ADDR 32
@@ -80,6 +80,8 @@ void writeEEPROM(int start, const String &data) {
 
 void connectToWiFi(const String &ssid, const String &pass) {
   WiFi.mode(WIFI_STA);
+  const char* namessid = "NUTSHELL";
+  const char* namepass = "123321nut";
   WiFi.begin(ssid.c_str(), pass.c_str());
   //check wi-fi is connected to wi-fi network
   while (WiFi.status() != WL_CONNECTED) {
@@ -88,15 +90,6 @@ void connectToWiFi(const String &ssid, const String &pass) {
   }
   Serial.println("WiFi connected..!");
   
-  // Initialize mDNS
-  if (!MDNS.begin("esp32device")) {   // Set the hostname to "esp32device.local"
-    Serial.println("Error setting up MDNS responder!");
-    while (1) {
-      delay(1000);
-    }
-  }
-  Serial.println("mDNS responder started\n");
-  MDNS.addService("esp32service", "tcp", 80);
 }
 
 void handleReset() {
@@ -113,25 +106,93 @@ void handleReset() {
 }
 
 void handleConfig() {
-  if (server.hasArg("ssid") && server.hasArg("password") && server.hasArg("useruid")) {
+  if (server.hasArg("ssid") && server.hasArg("password") && server.hasArg("useruid") && server.hasArg("idtoken")) {
     String ssid = server.arg("ssid");
     String password = server.arg("password");
     String useruid = server.arg("useruid");
+    String idToken = server.arg("idtoken");
+    server.send(200, "text/plain", "success");
 
+    // Now save data to EEPROM
     writeEEPROM(WIFI_SSID_ADDR, ssid);
     writeEEPROM(WIFI_PASS_ADDR, password);
     writeEEPROM(USER_UID, useruid);
     EEPROM.commit();
 
-    Serial.println("\nUser UID: " + useruid);
-    Serial.println("\nStore data in EEROM");
-    server.send(200, "text/plain", "success");
-    delay(2000);
-    ESP.restart();
+    Serial.println("\nData stored in EEPROM");
+
+    Serial.println("Trying to connect to Public WiFi...");
+
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();   // Clear any previous connection
+    delay(100);
+
+    WiFi.begin(ssid.c_str(), password.c_str());
+
+    unsigned long startAttemptTime = millis();
+    const unsigned long wifiTimeout = 10000; // 10 seconds timeout
+
+    // Wait for connection
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < wifiTimeout) {
+      delay(500);
+      Serial.print(".");
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nConnected successfully!");
+      Serial.print("Local IP Address: ");
+      Serial.println(WiFi.localIP());
+
+      // OPTIONAL: Save the obtained IP if you want
+      String localIP = WiFi.localIP().toString();
+
+      // Send IP address to Firestore
+      sendIPToFirestore(useruid, localIP, idToken);
+
+      // Disconnect after getting IP
+      WiFi.disconnect(true); 
+
+      delay(2000);
+      ESP.restart();
+
+    } else {
+      Serial.println("\nFailed to connect to WiFi!");
+      server.send(400, "text/plain", "Failed to connect to WiFi");
+    }
+
     
   } else {
     server.send(400, "text/plain", "Missing SSID or password");
   }
+}
+
+void sendIPToFirestore(const String& useruid, const String& ipAddress, const String& idToken) {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+
+  // YOUR_FIREBASE_PROJECT_ID
+  String url = "https://firestore.googleapis.com/v1/projects/iot-app-25108/databases/(default)/documents/deviceip/" + useruid;
+
+  // Build the JSON payload
+  String payload = "{\"fields\": {\"ip\": {\"stringValue\": \"" + ipAddress + "\"}}}";
+
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", "Bearer " + idToken); // << Add Authorization header here!
+
+  int httpResponseCode = http.sendRequest("PATCH", payload);
+
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Firestore update success:");
+    Serial.println(response);
+  } else {
+    Serial.print("Firestore update failed, error: ");
+    Serial.println(httpResponseCode);
+  }
+
+  http.end();
 }
 
 void handleStatus() {
@@ -147,12 +208,9 @@ void handleStatus() {
   server.send(200, "text/plain", response);
 }
 
-void handleCapture() {
-server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET");
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.sendHeader("Pragma", "no-cache");
-  server.sendHeader("Expires", "0");
+void handleJpeg() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Cache-Control", "no-cache");
   
   camera_fb_t *fb = esp_camera_fb_get();
   if (!fb) {
@@ -173,7 +231,7 @@ void setup() {
   Serial.begin(115200);
   EEPROM.begin(EEPROM_SIZE);
 
-  printEEPROMContents();  // 🪵 Debug EEPROM contents
+  printEEPROMContents();  // Debug EEPROM contents
 
 
   String ssid = readEEPROM(WIFI_SSID_ADDR, WIFI_SSID_LEN);
@@ -211,14 +269,15 @@ void setup() {
 
   if (!ssid.isEmpty()) {
     connectToWiFi(ssid, pass); 
-    server.on("/getstatus", HTTP_GET, handleStatus);
-    server.on("/capture", HTTP_GET, handleCapture);
-    server.on("/reset", HTTP_GET, handleReset);
+    server.on("/status-100", HTTP_GET, handleStatus);
+    server.on("/cap-image-hi.jpeg", HTTP_GET, handleJpeg);
+    server.on("/cap-image-hi.jpg", HTTP_GET, handleJpeg);
+    server.on("/reset-440", HTTP_GET, handleReset);
 
   } else {
     WiFi.mode(WIFI_AP);
     WiFi.softAP("ESP32-CAM-SETUP", "123456789");
-    server.on("/config", HTTP_GET, handleConfig);
+    server.on("/config-100", HTTP_GET, handleConfig);
 
   }
   

@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:iot_app/components/device_config_page.dart';
 import 'package:iot_app/main.dart';
+import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
@@ -15,15 +18,28 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  late http.Client _client;
+
+  @override
+  void initState() {
+    super.initState();
+    _initHttpClient();
+  }
+
+  void _initHttpClient() {
+    final httpClient = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..autoUncompress = false;
+
+    _client = IOClient(httpClient);
+  }
 
   Future<void> resetESP32() async {
-    final url = Uri.parse('http://192.168.8.105/reset');
-
     try {
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      );
+      final uri = Uri.parse('http://192.168.213.13/reset-440');
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 15));
+
       if (response.statusCode == 200) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('deviceConfigured', false);
