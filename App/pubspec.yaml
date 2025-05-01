@@ -32,6 +32,9 @@ dependencies:
   google_mlkit_face_detection: ^0.13.1
   cloud_firestore: ^5.6.7
   path_provider: ^2.1.5
+  intl: ^0.20.2
+  flutter_svg: ^2.1.0
+  google_generative_ai: ^0.4.7
 
 dev_dependencies:
   flutter_test:
@@ -47,3 +50,10 @@ flutter:
     - assets/icons8-google-96.png
     - assets/models/mobilefacenet.tflite
     - assets/unknown-icon.jpg
+    - assets/WellSync_logo.png
+    - assets/bg_Card1.png
+    - assets/bg_Card2.png
+    - assets/bg_Card3.png
+    - assets/bg_Card4.png
+    - assets/icons8-doctor.png
+    - assets/plant-100.png

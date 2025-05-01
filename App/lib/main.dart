@@ -148,7 +148,7 @@ class _MainPageState extends State<MainPage> {
       final response = await _client.get(uri);
 
       // Validate response
-      if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+      if (response.statusCode != 200) {
         throw Exception('Invalid image response');
       }
 
@@ -273,7 +273,7 @@ class _MainPageState extends State<MainPage> {
     await prefs.setString('device_ip', ip);
   }
 
-  static const _navBarTheme = NavigationBarThemeData(
+  static final _navBarTheme = NavigationBarThemeData(
     indicatorColor: Color.fromARGB(255, 200, 230, 201),
     labelTextStyle: WidgetStatePropertyAll(
       TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
