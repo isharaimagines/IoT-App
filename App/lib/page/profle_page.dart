@@ -110,26 +110,50 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final User? user = FirebaseAuth.instance.currentUser;
+    final String? photoUrl = user?.photoURL;
+    final String? Email = user?.email;
+    final String? displayName = user?.displayName ?? 'Guest';
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Settings"),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _confirmLogout,
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
       body: GestureDetector(
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(12),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SizedBox(height: 18),
+              Text(
+                'Your Account',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.symmetric(horizontal: 0),
+                leading: CircleAvatar(
+                  backgroundImage: photoUrl != null
+                      ? NetworkImage(photoUrl)
+                      : AssetImage('assets/unknown-icon.jpg') as ImageProvider,
+                ),
+                title: Text(
+                  displayName ?? 'Unknown',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  Email ?? '',
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout),
+                onPressed: _confirmLogout,
+                tooltip: 'Logout',
+              ),
               ElevatedButton(
                 onPressed: resetESP32,
                 child: const Text("Reset IoT Device (Clear EEPROM)"),

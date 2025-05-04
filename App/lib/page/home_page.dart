@@ -70,28 +70,30 @@ class _HomePageState extends State<HomePage> {
       // Face detection
     } on SocketException {
       setState(() {
-        _isDeviceActive = 'Network Error';
+        _isDeviceActive = 'Offline';
       });
       rethrow;
     } on Exception {
       setState(() {
-        _isDeviceActive = 'Error';
+        _isDeviceActive = 'Offline';
       });
       rethrow;
     } catch (e) {
       setState(() {
-        _isDeviceActive = 'Unexpected Error';
+        _isDeviceActive = 'Offline';
       });
       rethrow;
     } finally {
       setState(() {
-        _isDeviceActive = 'Not Loading...';
+        _isDeviceActive = 'Inactive';
       });
     }
   }
 
   @override
   void dispose() {
+    _client.close();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -132,7 +134,7 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       body: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -167,7 +169,7 @@ class _HomePageState extends State<HomePage> {
                     backgroundImage: AssetImage('assets/plant-100.png'),
                     radius: 28,
                   ),
-                  title: const Text('IoT PotDevice'),
+                  title: const Text('My Smart Pot'),
                   subtitle: Text(
                     _isDeviceActive,
                     style: TextStyle(
