@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:iot_app/components/ChatMessage.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -10,7 +12,8 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
-  final List<Map<String, String>> _messages = [];
+  final List<ChatMessage> _messages = [];
+  final ScrollController _scrollController = ScrollController();
   late final GenerativeModel _model;
 
   @override
@@ -18,32 +21,55 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     _model = GenerativeModel(
       model: 'gemini-2.0-flash',
-      apiKey:
-          'AIzaSyAHiIqcNLWWefj9eUky-oNQTkbRoJJMODA', // Replace with your Gemini API key
+      apiKey: 'AIzaSyAHiIqcNLWWefj9eUky-oNQTkbRoJJMODA',
     );
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   void _sendMessage() async {
     final input = _controller.text.trim();
     if (input.isEmpty) return;
 
+    final userMessage = ChatMessage(role: 'user', content: input);
+
     setState(() {
-      _messages.add({'role': 'user', 'text': input});
+      _messages.add(userMessage);
       _controller.clear();
     });
 
+    _scrollToBottom();
+
     try {
       final response = await _model.generateContent([Content.text(input)]);
-      final text = response.text?.trim();
-      if (text != null && text.isNotEmpty) {
-        setState(() {
-          _messages.add({'role': 'ai', 'text': text});
-        });
-      }
+
+      final aiResponse = ChatMessage(
+        role: 'ai',
+        content: response.text?.trim() ?? 'No response received',
+      );
+
+      setState(() {
+        _messages.add(aiResponse);
+      });
+
+      _scrollToBottom();
     } catch (e) {
       setState(() {
-        _messages.add({'role': 'ai', 'text': 'Error: ${e.toString()}'});
+        _messages.add(
+            ChatMessage.error('Service unavailable. Please try again later.'));
       });
+
+      _scrollToBottom();
     }
   }
 
@@ -53,7 +79,7 @@ class _ChatPageState extends State<ChatPage> {
       builder: (_) => AlertDialog(
         title: const Text('Privacy Information'),
         content: const Text(
-          'Your chat history will not be stored or utilized for training the model or any other purposes. You can engage confidently and seek assistance without any concerns.',
+          'Your chat history will not be stored or utilized for training the model or any other purposes.',
         ),
         actions: [
           TextButton(
@@ -71,22 +97,57 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  Widget _buildMessage(Map<String, String> message) {
-    final isUser = message['role'] == 'user';
+  Widget _buildMessage(ChatMessage message) {
+    final isUser = message.role == 'user';
+    final isError = message.isError;
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isUser ? Color.fromRGBO(146, 227, 169, 1) : Colors.grey[300],
-          borderRadius: BorderRadius.circular(8),
+          color: isError
+              ? Colors.red[100]
+              : isUser
+                  ? const Color.fromRGBO(146, 227, 169, 1)
+                  : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            if (!isError)
+              const BoxShadow(
+                color: Colors.black12,
+                blurRadius: 2,
+                offset: Offset(0, 1),
+              ),
+          ],
         ),
-        child: Text(
-          message['text'] ?? '',
-          style: TextStyle(
-            color: isUser ? Colors.white : Colors.black87,
-            fontSize: 16,
+        child: MarkdownBody(
+          data: message.content,
+          styleSheet: MarkdownStyleSheet(
+            h1: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            h2: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            h3: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            p: TextStyle(
+              color: isError
+                  ? Colors.red[800]
+                  : isUser
+                      ? Colors.white
+                      : Colors.black87,
+              fontSize: 16,
+            ),
+            code: const TextStyle(
+              backgroundColor: Color(0xFFEEEEEE),
+              fontFamily: 'Courier',
+            ),
+            strong: const TextStyle(fontWeight: FontWeight.bold),
+            em: const TextStyle(fontStyle: FontStyle.italic),
+            a: const TextStyle(decoration: TextDecoration.underline),
+            blockquotePadding: const EdgeInsets.all(8),
+            blockquoteDecoration: const BoxDecoration(
+              color: Color(0xFFF5F5F5),
+              border: Border(left: BorderSide(color: Colors.grey, width: 4)),
+            ),
           ),
         ),
       ),
@@ -100,14 +161,13 @@ class _ChatPageState extends State<ChatPage> {
         title: Row(
           children: [
             const CircleAvatar(
-              backgroundImage: AssetImage(
-                  'assets/icons8-doctor.png'), // Replace with your asset or NetworkImage
+              backgroundImage: AssetImage('assets/icons8-doctor.png'),
               radius: 20,
             ),
             const SizedBox(width: 8),
             const Text(
               'WellSync Assistant',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             const SizedBox(width: 4),
             const Icon(Icons.verified,
@@ -129,6 +189,7 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           Expanded(
             child: ListView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(8),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
@@ -145,7 +206,7 @@ class _ChatPageState extends State<ChatPage> {
                   child: TextField(
                     controller: _controller,
                     decoration: const InputDecoration(
-                      hintText: 'How can I help you...',
+                      hintText: 'How can I help you?',
                     ),
                   ),
                 ),
@@ -153,7 +214,7 @@ class _ChatPageState extends State<ChatPage> {
                 IconButton(
                   icon: const Icon(Icons.send),
                   onPressed: _sendMessage,
-                  color: Color.fromRGBO(146, 227, 169, 1),
+                  color: const Color.fromRGBO(146, 227, 169, 1),
                 ),
               ],
             ),

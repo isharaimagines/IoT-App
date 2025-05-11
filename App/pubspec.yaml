@@ -35,6 +35,9 @@ dependencies:
   intl: ^0.20.2
   flutter_svg: ^2.1.0
   google_generative_ai: ^0.4.7
+  equatable: ^2.0.7
+  flutter_markdown: ^0.7.7+1
+  fl_chart: ^0.71.0
 
 dev_dependencies:
   flutter_test:

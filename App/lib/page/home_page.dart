@@ -149,27 +149,34 @@ class _HomePageState extends State<HomePage> {
               title: Text(
                 displayName ?? 'Unknown',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               subtitle: Text(
                 'How are you today?',
                 style: TextStyle(
+                  fontSize: 18,
                   color: Colors.grey.shade500,
                 ),
               ),
             ),
             SizedBox(height: 10),
             Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6), // Dialog border radius
+              ),
               child: Padding(
                 padding: EdgeInsets.zero,
                 child: ListTile(
                   leading: const CircleAvatar(
                     backgroundImage: AssetImage('assets/plant-100.png'),
-                    radius: 28,
+                    radius: 30,
                   ),
-                  title: const Text('My Smart Pot'),
+                  title: const Text(
+                    'MY SAMRT POT',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(
                     _isDeviceActive,
                     style: TextStyle(
@@ -183,7 +190,8 @@ class _HomePageState extends State<HomePage> {
             Text(
               'Recent Activities',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
                 color: Colors.black,
                 // fontWeight: FontWeight.bold,
               ),
