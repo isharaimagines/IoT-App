@@ -19,7 +19,7 @@ class DeviceSetupPage extends StatefulWidget {
 }
 
 class _DeviceSetupPageState extends State<DeviceSetupPage> {
-  bool _isChecking = false;
+  final _isChecking = false;
   bool _obscurePassword = true;
   final NetworkInfo _networkInfo = NetworkInfo();
   final _ssidController = TextEditingController();

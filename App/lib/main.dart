@@ -99,7 +99,7 @@ class _MainPageState extends State<MainPage> {
     }
 
     // Set up periodic fetching
-    _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 60), (timer) {
       if (!_isDisposed) {
         _fetchImage();
       } else {
@@ -111,8 +111,7 @@ class _MainPageState extends State<MainPage> {
   void _initHttpClient() {
     final httpClient = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10)
-      ..autoUncompress = false;
-
+      ..badCertificateCallback = (cert, host, port) => true; // For testing only
     _client = IOClient(httpClient);
   }
 
@@ -156,7 +155,7 @@ class _MainPageState extends State<MainPage> {
     } catch (e) {
       if (!_isDisposed) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(content: Text('Error-: ${e.toString()}')),
         );
       }
     } finally {
@@ -221,6 +220,71 @@ class _MainPageState extends State<MainPage> {
         SnackBar(
           content: Text('Found ${faces.length} faces'),
           duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+
+    // New emotion detection logic
+    final faceDataQuery = await FirebaseFirestore.instance
+        .collection('face_detections')
+        .doc(user.uid)
+        .collection('face_data')
+        .orderBy('timestamp', descending: true)
+        .limit(4)
+        .get();
+
+    final smilingProbs = faceDataQuery.docs
+        .map((doc) => doc.data()['smilingProbability'] as double?)
+        .where((prob) => prob != null)
+        .cast<double>()
+        .toList();
+
+    if (smilingProbs.isEmpty) return;
+
+    final windowAverage =
+        smilingProbs.reduce((a, b) => a + b) / smilingProbs.length;
+
+    String emotion;
+    if (windowAverage >= 0.6) {
+      emotion = 'Happy 😊';
+    } else if (windowAverage >= 0.4) {
+      emotion = 'Neutral 😐';
+    } else {
+      emotion = 'Sad 😢';
+    }
+
+    if (!_isDisposed && mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Mood Analysis'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Image from network URL
+              Image.network(
+                "https://res.cloudinary.com/dmf5k7o0s/image/upload/v1747596694/opatvsqqiozrdvcjl6m1.jpg", // Implement this function
+                height: 120,
+                width: 120,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const CircularProgressIndicator();
+                },
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.error_outline),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                  'Your average mood score: ${windowAverage.toStringAsFixed(2)}\n$emotion'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
         ),
       );
     }
