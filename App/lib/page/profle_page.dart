@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:iot_app/components/device_config_page.dart';
 import 'package:iot_app/main.dart';
-import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -20,338 +21,431 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   late http.Client _client;
-
   bool light = false;
+  bool _isResetting = false;
+  bool _isLoggingOut = false;
+  bool _isDeleting = false;
 
   @override
   void initState() {
     super.initState();
     _initHttpClient();
+    _loadNotificationPrefs();
   }
 
   void _initHttpClient() {
     final httpClient = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10)
-      ..autoUncompress = false;
-
+      ..badCertificateCallback =
+          (cert, host, port) => true; // For development only
     _client = IOClient(httpClient);
   }
 
-  Future<void> _resetESP32() async {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
+  Future<void> _loadNotificationPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final storedIp = prefs.getString('device_ip');
+    setState(() {
+      light = prefs.getBool('notificationsEnabled') ?? false;
+    });
+  }
 
-    if (storedIp == null || storedIp.isEmpty) {
-      return;
-    }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6), // Dialog border radius
-        ),
-        title: const Text("Confirm Reset"),
-        content: const Text(
-            "This will erase all device configurations. Reset the smart pot. Are you sure you want to continue?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("Reset Anyway"),
-          ),
-        ],
-      ),
-    );
+  Future<void> _saveNotificationPrefs(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notificationsEnabled', value);
+  }
 
-    if (confirmed == true) {
-      try {
-        final loadingSnackBar = SnackBar(
-          backgroundColor: Colors.black,
-          content: Row(
-            children: [
-              const CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(Colors.white),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                'Initiating reset...',
-                style: TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-          duration: const Duration(seconds: 5),
-        );
-        scaffoldMessenger.showSnackBar(loadingSnackBar);
+  Future<void> _resetESP32() async {
+    if (_isResetting) return;
+    setState(() => _isResetting = true);
 
-        final uri = Uri.parse('http://$storedIp/reset-440');
-        final response =
-            await _client.get(uri).timeout(const Duration(seconds: 5));
+    try {
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      final prefs = await SharedPreferences.getInstance();
 
-        scaffoldMessenger.hideCurrentSnackBar();
-
-        if (response.statusCode == 200) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('deviceConfigured', false);
-
+      // Your existing status check logic...
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
           scaffoldMessenger.showSnackBar(
-            const SnackBar(
-              content: Text('Device reset successful'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-
-          await Future.delayed(const Duration(seconds: 1));
-          navigator.pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => const DeviceSetupPage(),
-            ),
-          );
-        } else {
-          scaffoldMessenger.showSnackBar(
-            SnackBar(
-              content: Text('Reset failed: ${response.statusCode}',
-                  style: TextStyle(color: Colors.black)),
-              backgroundColor: Colors.red,
-            ),
+            const SnackBar(content: Text('Not Authenticated')),
           );
         }
-      } catch (error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'Reseting failed. Please device connect to the Internet to continue.${error}')),
+        return;
+      }
+
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('deviceip')
+          .doc(user.uid)
+          .get();
+
+      if (!mounted) return;
+
+      if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('ip')) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Not Configured')),
         );
         return;
       }
+
+      final storedIp = docSnapshot.data()!['ip'] as String;
+      if (storedIp.isEmpty) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Invalid IP')),
+        );
+        return;
+      }
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: const Text("Confirm Reset"),
+          content: const Text(
+              "This will erase all device configurations. Are you sure?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                  side: const BorderSide(color: Colors.black),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                "Reset",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Resetting device...'),
+            ],
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
+
+      final uri = Uri.parse('http://$storedIp/reset-440');
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode != 200) {
+        throw Exception('Not reset device');
+      }
+
+      await prefs.setBool('deviceConfigured', false);
+      await prefs.remove('device_ip');
+
+      scaffoldMessenger.hideCurrentSnackBar();
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Device reset successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      navigator.pushReplacement(
+        MaterialPageRoute(builder: (context) => const DeviceSetupPage()),
+      );
+    } on TimeoutException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reset timed out')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Reset failed: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isResetting = false);
     }
   }
 
   Future<void> _confirmLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6), // Dialog border radius
-        ),
-        title: const Text("Sign Out"),
-        content: const Text("Do you need sign out from WellSync"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("Cancel"),
+    if (_isLoggingOut) return;
+    setState(() => _isLoggingOut = true);
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
+          title: const Text("Sign Out"),
+          content: const Text("Are you sure you want to sign out?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
               ),
             ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("Sign Out"),
-          ),
-        ],
-      ),
-    );
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                  side: const BorderSide(color: Colors.black),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                "Sign Out",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 
-    if (confirmed == true) {
+      if (confirmed != true) return;
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isLoggedIn', false);
-
-      await Future.delayed(Duration(seconds: 2));
+      await prefs.remove('device_ip');
 
       await FirebaseAuth.instance.signOut();
       await _googleSignIn.signOut();
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MyApp(),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const AuthWrapper()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logout failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoggingOut = false);
     }
   }
 
   Future<void> _accountDeletion() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6), // Dialog border radius
-        ),
-        title: const Text("Delete Account"),
-        content: const Text(
-            "This will delete account. Are you sure you want to continue?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("Cancel"),
+    if (_isDeleting) return;
+    setState(() => _isDeleting = true);
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
+          title: const Text("Delete Account"),
+          content: const Text("This will permanently delete your account."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
               ),
             ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', false);
-
-      await Future.delayed(Duration(seconds: 2));
-
-      await FirebaseAuth.instance.signOut();
-      await _googleSignIn.signOut();
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MyApp(),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                  side: const BorderSide(color: Colors.black),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                "Delete",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ],
         ),
       );
+
+      if (confirmed != true) return;
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.delete();
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      await _googleSignIn.signOut();
+
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const AuthWrapper()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deletion failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
     }
   }
 
   @override
+  void dispose() {
+    _client.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final User? user = FirebaseAuth.instance.currentUser;
-    final String? photoUrl = user?.photoURL;
-    final String? emailId = user?.email;
-    final String? displayName = user?.displayName;
+    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      body: GestureDetector(
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: 18),
-              Text(
-                'Your Account',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            const Text(
+              'Your Account',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                backgroundImage: user?.photoURL != null
+                    ? NetworkImage(user!.photoURL!)
+                    : const AssetImage('assets/unknown-icon.jpg')
+                        as ImageProvider,
               ),
-              ListTile(
-                contentPadding: EdgeInsets.symmetric(horizontal: 0),
-                leading: CircleAvatar(
-                  backgroundImage: photoUrl != null
-                      ? NetworkImage(photoUrl)
-                      : AssetImage('assets/unknown-icon.jpg') as ImageProvider,
-                ),
-                title: Text(
-                  displayName ?? 'Unknown',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                subtitle: Text(
-                  emailId ?? '',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                  ),
-                ),
+              title: Text(
+                user?.displayName ?? 'Unknown',
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              SizedBox(height: 18),
-              Text(
-                'Notification Settings',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              subtitle: Text(user?.email ?? ''),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Notification Settings',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            SwitchListTile(
+              title: const Text(
+                'Real-time notifications',
+                style: TextStyle(color: Colors.black), // Text color
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text('Real time notification',
-                      style: TextStyle(fontSize: 18)),
-                  Switch(
-                    value: light,
-                    activeColor: Colors.green,
-                    onChanged: (bool value) {
-                      setState(() {
-                        light = value;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              SizedBox(height: 18),
-              Text(
-                'Account Manage & Security',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await _accountDeletion();
-                    },
-                    icon: const Icon(Icons.delete),
-                    label: const Text('Delete Account Permanently')),
-              ),
-              const SizedBox(
-                height: 10,
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await _confirmLogout();
-                    },
-                    icon: const Icon(Icons.exit_to_app),
-                    label: const Text('Sign Out')),
-              ),
-              const SizedBox(
-                height: 20,
-              ),
-              Text(
-                'Smart Pot Manage',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await _resetESP32();
-                    },
-                    icon: const Icon(Icons.restart_alt),
-                    label: const Text('Reset Smart Pot')),
-              ),
-              const SizedBox(
-                height: 10,
-              ),
-            ],
-          ),
+              value: light,
+              onChanged: (value) {
+                setState(() => light = value);
+                _saveNotificationPrefs(value);
+              },
+              activeColor: Colors.green, // Thumb when ON
+              activeTrackColor:
+                  Color.fromARGB(255, 200, 230, 201), // Track when ON
+              inactiveThumbColor: Colors.grey, // Thumb when OFF
+              inactiveTrackColor: Colors.white, // Track when OFF
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Account Management',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            _buildActionButton(
+              icon: Icons.delete,
+              label: 'Delete Account',
+              onPressed: _accountDeletion,
+              isLoading: _isDeleting,
+              color: Colors.red,
+            ),
+            const SizedBox(height: 8),
+            _buildActionButton(
+              icon: Icons.logout,
+              label: 'Sign Out',
+              onPressed: _confirmLogout,
+              isLoading: _isLoggingOut,
+              color: Colors.orange,
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Device Management',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            _buildActionButton(
+              icon: Icons.restart_alt,
+              label: 'Reset Smart Pot',
+              onPressed: _resetESP32,
+              isLoading: _isResetting,
+              color: Colors.black,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    required bool isLoading,
+    required Color color,
+  }) {
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 48),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(100),
+        ),
+      ),
+      onPressed: isLoading ? null : onPressed,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 16,
+          color: Colors.black,
         ),
       ),
     );

@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:iot_app/components/device_config_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,95 +19,135 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late http.Client _client;
   Timer? _timer;
-  String _isDeviceActive = 'Offline';
+  String _isDeviceActive = 'Checking...';
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _initHttpClient();
-    _startGetStatus();
+
+    // Schedule the initial status check after the frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startGetStatus();
+    });
   }
 
   void _initHttpClient() {
     final httpClient = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10)
-      ..autoUncompress = false;
-
+      ..badCertificateCallback = (cert, host, port) => true; // For testing only
     _client = IOClient(httpClient);
   }
 
   void _startGetStatus() {
-    _initDeviceStatus();
-    _timer =
-        Timer.periodic(const Duration(seconds: 60), (_) => _initDeviceStatus());
+    // Cancel any existing timer
+    _timer?.cancel();
+
+    // Immediate check
+    _checkDeviceStatus();
+
+    // Periodic checks
+    _timer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (mounted) {
+        _checkDeviceStatus();
+      } else {
+        timer.cancel();
+      }
+    });
   }
 
-  Future<void> _initDeviceStatus() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final storedIp = prefs.getString('device_ip');
+  Future<void> _checkDeviceStatus() async {
+    if (!mounted || _isLoading) return;
 
-      if (storedIp == null || storedIp.isEmpty) {
+    setState(() => _isLoading = true);
+
+    try {
+      // Your existing status check logic...
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          setState(() => _isDeviceActive = 'Not Authenticated');
+        }
+        return;
+      }
+
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('deviceip')
+          .doc(user.uid)
+          .get();
+
+      if (!mounted) return;
+
+      if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('ip')) {
+        setState(() => _isDeviceActive = 'Not Configured');
+        return;
+      }
+
+      final storedIp = docSnapshot.data()!['ip'] as String;
+      if (storedIp.isEmpty) {
+        setState(() => _isDeviceActive = 'Invalid IP');
         return;
       }
 
       final uri = Uri.parse('http://$storedIp/status-100');
-      final response = await _client.get(uri);
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 60));
 
-      // Validate response
-      if (response.statusCode != 200) {
+      if (mounted) {
         setState(() {
-          _isDeviceActive = 'Offline';
+          _isDeviceActive = response.statusCode == 200 ? 'Online' : 'Offline';
         });
-        return;
-      } else {
-        setState(() {
-          _isDeviceActive = 'Active';
-        });
-        return;
       }
-
-      // Face detection
     } on SocketException {
-      setState(() {
-        _isDeviceActive = 'Offline';
-      });
-      rethrow;
-    } on Exception {
-      setState(() {
-        _isDeviceActive = 'Offline';
-      });
-      rethrow;
+      if (mounted) setState(() => _isDeviceActive = 'Switch Off');
+    } on TimeoutException {
+      if (mounted) setState(() => _isDeviceActive = 'Timeout');
     } catch (e) {
-      setState(() {
-        _isDeviceActive = 'Offline';
-      });
-      rethrow;
+      if (mounted) setState(() => _isDeviceActive = 'Error');
+      debugPrint('Status check error: $e');
     } finally {
-      setState(() {
-        _isDeviceActive = 'Inactive';
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   void dispose() {
-    _client.close();
+    // Cancel the timer first
     _timer?.cancel();
+    _timer = null;
+
+    // Close the HTTP client
+    _client.close();
+
     super.dispose();
+  }
+
+  Color _getStatusColor() {
+    switch (_isDeviceActive) {
+      case 'Online':
+        return Colors.green;
+      case 'Offline':
+        return Colors.red;
+      case 'Network Error':
+      case 'Timeout':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final User? user = FirebaseAuth.instance.currentUser;
-    final String? photoUrl = user?.photoURL;
-    final String? displayName = user?.displayName ?? 'Guest';
+    final user = FirebaseAuth.instance.currentUser;
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(Duration(days: 1));
+    final endOfDay = startOfDay.add(const Duration(days: 1));
 
     String getImageForTag(String? tag) {
-      switch (tag) {
+      switch (tag?.toLowerCase()) {
         case 'happy':
           return 'assets/bg_Card2.png';
         case 'sad':
@@ -120,7 +160,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     Color getColorForTag(String? tag) {
-      switch (tag) {
+      switch (tag?.toLowerCase()) {
         case 'happy':
           return Colors.yellow.shade50;
         case 'sad':
@@ -138,33 +178,34 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 18),
+            const SizedBox(height: 18),
             ListTile(
-              contentPadding: EdgeInsets.symmetric(horizontal: 0),
+              contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
-                backgroundImage: photoUrl != null
-                    ? NetworkImage(photoUrl)
-                    : AssetImage('assets/unknown-icon.jpg') as ImageProvider,
+                backgroundImage: user?.photoURL != null
+                    ? NetworkImage(user!.photoURL!)
+                    : const AssetImage('assets/unknown-icon.jpg')
+                        as ImageProvider,
               ),
               title: Text(
-                displayName ?? 'Unknown',
-                style: TextStyle(
+                user?.displayName ?? 'Guest',
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              subtitle: Text(
+              subtitle: const Text(
                 'How are you today?',
                 style: TextStyle(
                   fontSize: 18,
-                  color: Colors.grey.shade500,
+                  color: Colors.grey,
                 ),
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Card(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6), // Dialog border radius
+                borderRadius: BorderRadius.circular(100),
               ),
               child: Padding(
                 padding: EdgeInsets.zero,
@@ -174,126 +215,191 @@ class _HomePageState extends State<HomePage> {
                     radius: 30,
                   ),
                   title: const Text(
-                    'MY SAMRT POT',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    'MY SMART POT',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   subtitle: Text(
                     _isDeviceActive,
                     style: TextStyle(
-                      color: Colors.green.shade500,
+                      color: _getStatusColor(),
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-              ),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Recent Activities',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-                // fontWeight: FontWeight.bold,
-              ),
-            ),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('recent')
-                    .doc(user!.uid)
-                    .collection('activities')
-                    .where('addtime',
-                        isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-                    .where('addtime', isLessThan: Timestamp.fromDate(endOfDay))
-                    .orderBy('addtime', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Center(child: Text('No activities found.'));
-                  }
-
-                  return ScrollConfiguration(
-                      behavior: const ScrollBehavior()
-                          .copyWith(physics: BouncingScrollPhysics()),
-                      child: ListView(
-                        children: snapshot.data!.docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return Card(
-                            margin: EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                            color: getColorForTag(data['tag']),
-                            child: Stack(
+                  trailing: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : InkWell(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DeviceSetupPage(),
+                            ),
+                          ),
+                          // borderRadius: BorderRadius.circular(2),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color.fromARGB(255, 200, 230, 201),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Positioned.fill(
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Opacity(
-                                      opacity: 0.5,
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.only(
-                                          topRight: Radius.circular(8),
-                                          bottomRight: Radius.circular(8),
-                                        ),
-                                        child: Image.asset(
-                                          getImageForTag(data['tag']),
-                                          fit: BoxFit.cover,
-                                          width: 180,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        DateFormat.jm().format(
-                                            (data['addtime'] as Timestamp)
-                                                .toDate()),
-                                        style: TextStyle(
-                                            fontSize: 12, color: Colors.grey),
-                                      ),
-                                      Text(
-                                        data['title'] ?? 'No Title',
-                                        style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                      Text(data['about'] ?? 'No Description'),
-                                      SizedBox(height: 6),
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 8.0, vertical: 2.0),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              Color.fromRGBO(146, 227, 169, 1),
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          data['tag'] ?? 'No Tag',
-                                          style: TextStyle(color: Colors.white),
-                                        ),
-                                      ),
-                                    ],
+                                Text(
+                                  (_isDeviceActive == 'Online' ||
+                                          _isDeviceActive == 'Offline')
+                                      ? 'Connected'
+                                      : 'Connect',
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 16,
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        }).toList(),
-                      ));
-                },
+                          ),
+                        ),
+                ),
               ),
-            )
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Recent Activities',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: user == null
+                  ? const Center(
+                      child: Text('Please sign in to view activities'))
+                  : StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('recent')
+                          .doc(user.uid)
+                          .collection('activities')
+                          .where('addtime',
+                              isGreaterThanOrEqualTo:
+                                  Timestamp.fromDate(startOfDay))
+                          .where('addtime',
+                              isLessThan: Timestamp.fromDate(endOfDay))
+                          .orderBy('addtime', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Center(
+                              child: Text('No activities today'));
+                        }
+
+                        return ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: snapshot.data!.docs.length,
+                          itemBuilder: (context, index) {
+                            final doc = snapshot.data!.docs[index];
+                            final data = doc.data() as Map<String, dynamic>;
+                            final time =
+                                (data['addtime'] as Timestamp).toDate();
+
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              color: getColorForTag(data['tag']),
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Opacity(
+                                        opacity: 0.5,
+                                        child: ClipRRect(
+                                          borderRadius: const BorderRadius.only(
+                                            topRight: Radius.circular(8),
+                                            bottomRight: Radius.circular(8),
+                                          ),
+                                          child: Image.asset(
+                                            getImageForTag(data['tag']),
+                                            fit: BoxFit.cover,
+                                            width: 180,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          DateFormat.jm().format(time),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          data['title'] ?? 'No Title',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(data['about'] ?? 'No Description'),
+                                        const SizedBox(height: 6),
+                                        if (data['tag'] != null)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF92E3A9),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              data['tag']
+                                                  .toString()
+                                                  .toUpperCase(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
           ],
         ),
       ),

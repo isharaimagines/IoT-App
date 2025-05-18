@@ -220,11 +220,23 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                       text: 'Select & connect to:',
                       subText: 'SSID: ESP32-CAM-SETUP\nPassword: 123456789',
                     ),
+
                     const SizedBox(height: 32),
-                    Center(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.wifi),
-                        label: const Text('Open Wi-Fi Settings'),
+
+                    SizedBox(
+                      width: double.maxFinite,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(
+                          Icons.wifi,
+                          color: Colors.black,
+                        ),
+                        label: const Text(
+                          'Open Wi-Fi Settings',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.black,
+                          ),
+                        ),
                         onPressed: () {
                           AppSettings.openAppSettings(
                               type: AppSettingsType.wifi);
@@ -233,11 +245,13 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(100),
                           ),
+                          foregroundColor: Colors.black,
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 32),
 
                     // Section 2: WiFi Configuration
@@ -256,7 +270,10 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                             value: _selectedSSID,
                             decoration: const InputDecoration(
                               labelText: 'Select WiFi Network',
-                              border: OutlineInputBorder(),
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(100)),
+                              ),
                               contentPadding: EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 14),
                             ),
@@ -282,17 +299,21 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
                                 )
-                              : const Icon(Icons.refresh),
+                              : const Icon(
+                                  Icons.refresh,
+                                  color: Colors.black,
+                                ),
                           style: IconButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).primaryColor.withOpacity(0.1),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(100),
+                              side: const BorderSide(color: Colors.black),
                             ),
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(14),
                           ),
                         ),
                       ],
@@ -304,7 +325,9 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                       controller: _passController,
                       decoration: InputDecoration(
                         labelText: "Your WiFi Password",
-                        border: const OutlineInputBorder(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(100)),
+                        ),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword
@@ -325,16 +348,23 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
 
                     // Config Button
                     SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
+                      width: double.maxFinite,
+                      child: OutlinedButton(
                         onPressed: _sendWiFiCredentials,
-                        style: ElevatedButton.styleFrom(
+                        style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          foregroundColor: Colors.black,
+                        ),
+                        child: const Text(
+                          "Config IoT Device",
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.black,
                           ),
                         ),
-                        child: const Text("Config IoT Device"),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -362,10 +392,10 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
       children: [
         CircleAvatar(
           radius: 12,
-          backgroundColor: Theme.of(context).primaryColor,
+          backgroundColor: Color.fromARGB(255, 200, 230, 201),
           child: Text(
             number.toString(),
-            style: const TextStyle(color: Colors.white, fontSize: 12),
+            style: const TextStyle(color: Colors.black, fontSize: 12),
           ),
         ),
         const SizedBox(width: 12),

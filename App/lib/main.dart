@@ -1,42 +1,30 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'package:iot_app/components/device_config_page.dart';
 import 'package:iot_app/components/sign_in_page.dart';
 import 'package:iot_app/page/chat_page.dart';
 import 'package:iot_app/page/home_page.dart';
 import 'package:iot_app/page/mood_page.dart';
 import 'package:iot_app/page/profle_page.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+  runApp(
+    MaterialApp(
       home: const AuthWrapper(),
-    );
-  }
+      debugShowCheckedModeBanner: true,
+    ),
+  );
 }
 
 class AuthWrapper extends StatelessWidget {
@@ -52,27 +40,12 @@ class AuthWrapper extends StatelessWidget {
         }
 
         if (snapshot.hasData) {
-          return FutureBuilder<bool>(
-            future: _isDeviceConfigured(),
-            builder: (context, configSnapshot) {
-              if (configSnapshot.connectionState == ConnectionState.waiting) {
-                return const LoadingScreen();
-              }
-              return configSnapshot.data == true
-                  ? const MainPage()
-                  : const DeviceSetupPage();
-            },
-          );
+          return const MainPage(); // Add this redirect if needed
         }
 
         return SignInPage();
       },
     );
-  }
-
-  Future<bool> _isDeviceConfigured() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('deviceConfigured') ?? false;
   }
 }
 
@@ -99,6 +72,7 @@ class _MainPageState extends State<MainPage> {
   Timer? _timer;
   late http.Client _client;
   bool _isLoading = false;
+  bool _isDisposed = false; // Track if widget is disposed
 
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -111,14 +85,27 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    _ipGetFirestore();
-    _startImageFetching();
     _initHttpClient();
+    _startImageFetching();
   }
 
   void _startImageFetching() {
-    _fetchImage();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _fetchImage());
+    // Cancel any existing timer
+    _timer?.cancel();
+
+    // Initial fetch
+    if (!_isDisposed) {
+      _fetchImage();
+    }
+
+    // Set up periodic fetching
+    _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (!_isDisposed) {
+        _fetchImage();
+      } else {
+        timer.cancel();
+      }
+    });
   }
 
   void _initHttpClient() {
@@ -130,45 +117,59 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _fetchImage() async {
-    if (_isLoading) return;
+    if (_isLoading || _isDisposed) return;
 
-    setState(() {
+    _safeSetState(() {
       _isLoading = true;
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final storedIp = prefs.getString('device_ip');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || _isDisposed) return;
 
-      if (storedIp == null || storedIp.isEmpty) {
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('deviceip')
+          .doc(user.uid)
+          .get();
+
+      if (_isDisposed) return;
+
+      if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('ip')) {
         return;
       }
 
+      final storedIp = docSnapshot.data()!['ip'] as String;
       final uri = Uri.parse('http://$storedIp/cap-image-hi.jpg');
-      final response = await _client.get(uri);
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 8));
 
-      // Validate response
       if (response.statusCode != 200) {
         throw Exception('Invalid image response');
       }
 
-      // Process image
       final bytes = response.bodyBytes;
-
-      // Face detection
       final faces = await _detectFaces(bytes);
 
-      _handleFaceResults(faces);
-    } on SocketException {
-      throw Exception(
-          'Network error. Ensure you\'re connected to the network.');
-    } on Exception catch (e) {
-      throw Exception(e.toString());
+      if (!_isDisposed) {
+        await _handleFaceResults(faces);
+      }
     } catch (e) {
-      throw Exception('Unexpected error: $e');
+      if (!_isDisposed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
-      throw Exception('Not loading...');
+      if (!_isDisposed) {
+        _safeSetState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // Helper method for safe state updates
+  void _safeSetState(VoidCallback fn) {
+    if (!_isDisposed && mounted) {
+      setState(fn);
     }
   }
 
@@ -182,20 +183,23 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _handleFaceResults(List<Face> faces) async {
-    if (!mounted || faces.isEmpty) return;
+    if (_isDisposed || faces.isEmpty) return;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final now = DateTime.now();
-
     final faceDataRef = FirebaseFirestore.instance
         .collection('face_detections')
         .doc(user.uid)
         .collection('face_data');
 
+    // Batch write for better performance
+    final batch = FirebaseFirestore.instance.batch();
+
     for (final face in faces) {
-      await faceDataRef.add({
+      final docRef = faceDataRef.doc();
+      batch.set(docRef, {
         'timestamp': now.toIso8601String(),
         'boundingBox': {
           'left': face.boundingBox.left,
@@ -210,71 +214,29 @@ class _MainPageState extends State<MainPage> {
       });
     }
 
-    final results = faces.map((face) {
-      return '''
-      Face detected:
-      - Bounding box: ${face.boundingBox}
-      - Head rotation: ${face.headEulerAngleY}°
-      - Left eye: ${face.leftEyeOpenProbability}
-      - Right eye: ${face.rightEyeOpenProbability}
-      - Smilling: ${face.smilingProbability}
-      
-      ''';
-    }).join('\n');
+    await batch.commit();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(faces.isEmpty
-            ? 'No faces found'
-            : 'Found ${faces.length} faces:\n$results'),
-        duration: Duration(seconds: faces.isEmpty ? 2 : 5),
-      ),
-    );
+    if (!_isDisposed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Found ${faces.length} faces'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
-    _client.close();
+    _isDisposed = true; // Mark as disposed first
     _timer?.cancel();
+    _client.close();
+    _faceDetector.close();
     super.dispose();
   }
 
-  Future<void> _ipGetFirestore() async {
-    // Get current user UID
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
-      );
-      return;
-    }
-
-    final docSnapshot = await FirebaseFirestore.instance
-        .collection('deviceip')
-        .doc(user.uid)
-        .get();
-
-    if (!docSnapshot.exists) throw Exception('IP document not found');
-
-    final ip = docSnapshot.data()?['ip'];
-
-    if (ip == null || ip.isEmpty) {
-      throw Exception('IP address missing in Firestore');
-    }
-
-    if (ip.isNotEmpty) {
-      return;
-    }
-
-    debugPrint(ip);
-
-    // Save to SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('device_ip', ip);
-  }
-
   static final _navBarTheme = NavigationBarThemeData(
-    indicatorColor: Color.fromARGB(255, 200, 230, 201),
+    indicatorColor: Color.fromRGBO(200, 230, 201, 1),
     labelTextStyle: WidgetStatePropertyAll(
       TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
     ),
@@ -304,10 +266,10 @@ class _MainPageState extends State<MainPage> {
   ];
 
   final List<Widget> _screens = [
-    const HomePage(),
+    HomePage(),
     ChatPage(),
     MoodPage(),
-    const ProfilePage(),
+    ProfilePage(),
   ];
 
   @override
