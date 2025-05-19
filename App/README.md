@@ -1,6 +1,6 @@
 # 📘 User Guide
 
-## 🔌 How to Set Up the IoT Device
+## How to Set Up the IoT Device
 
 1. Power on the IoT device using the ON/OFF switch.
 2. Position the device facing you, preferably on a flat surface such as a desk.
@@ -9,9 +9,10 @@
 
 ---
 
-## 💻 Running the Application Locally
+## Running the Application Locally
 
 Follow these steps to set up and run the application on your local machine:
+**_Make sure you are setup Flutter and Android SDKs_**
 
 ### 1. Clone the Repository
 
@@ -50,16 +51,17 @@ The application will build and launch on your connected Android device or emulat
 
 ---
 
-### 📱 Requirements
+### Requirements
 
 - Android device or emulator
 - Visual Studio Code
 - Android SDK
+- Flutter
 - Type-C charger for the IoT device
 
 ---
 
-### 🔗 Repository
+### Repository
 
 [IoT-App GitHub Repository](https://github.com/isharaimagines/IoT-App)
 
@@ -67,7 +69,7 @@ The application will build and launch on your connected Android device or emulat
 
 ---
 
-## 📱 How to Run the Application on a Smartphone Using the APK
+## How to Run the Application on a Smartphone Using the APK
 
 Follow the steps below to install and use the application directly on your Android smartphone:
 
