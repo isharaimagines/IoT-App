@@ -55,15 +55,19 @@ The application will build and launch on your connected Android device or emulat
 
 - Android device or emulator
 - Visual Studio Code
-- Android SDK
-- Flutter
-- Type-C charger for the IoT device
+- Android SDK 33.0.2
+- Flutter SDK 3.27.1
+- OpenJDK 17.0.2
+- IoT Device (Smart Pot)
+- Type-C charger (When need charge the IoT Device)
 
 ---
 
 ### Repository
 
 [IoT-App GitHub Repository](https://github.com/isharaimagines/IoT-App)
+
+---
 
 ---
 
@@ -111,5 +115,12 @@ Download the APK file from the provided OneDrive link directly to your smartphon
 
 ### 6. Configure the IoT Device
 
-- Follow the on-screen setup instructions to configure your IoT device for the first time.
-- Upon successful configuration, you will be redirected to the app’s **Home Page** with full access.
+- Click the connect button above the **Today Tabe** to configure your IoT device for the first time.
+- Upon successful configuration, you will be redirected to the app’s **Today Page** with full access.
+
+### Requirements
+
+- Android SmartPhone
+- IoT Device (Smart Pot)
+- Android Version >= 10
+- Type-C charger (When need charge the IoT Device)
