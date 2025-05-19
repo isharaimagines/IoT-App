@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
+import 'package:iot_app/components/showEmotionDialog.dart';
 import 'package:iot_app/components/sign_in_page.dart';
 import 'package:iot_app/page/chat_page.dart';
 import 'package:iot_app/page/home_page.dart';
@@ -14,6 +16,7 @@ import 'package:iot_app/page/mood_page.dart';
 import 'package:iot_app/page/profle_page.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,7 +75,10 @@ class _MainPageState extends State<MainPage> {
   Timer? _timer;
   late http.Client _client;
   bool _isLoading = false;
-  bool _isDisposed = false; // Track if widget is disposed
+  bool _isDisposed = false;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  late SharedPreferences _prefs;
+  bool _isDialogShowing = false;
 
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -99,7 +105,7 @@ class _MainPageState extends State<MainPage> {
     }
 
     // Set up periodic fetching
-    _timer = Timer.periodic(const Duration(seconds: 60), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 20), (timer) {
       if (!_isDisposed) {
         _fetchImage();
       } else {
@@ -110,7 +116,7 @@ class _MainPageState extends State<MainPage> {
 
   void _initHttpClient() {
     final httpClient = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 10)
+      ..connectionTimeout = const Duration(seconds: 20)
       ..badCertificateCallback = (cert, host, port) => true; // For testing only
     _client = IOClient(httpClient);
   }
@@ -215,14 +221,12 @@ class _MainPageState extends State<MainPage> {
 
     await batch.commit();
 
-    if (!_isDisposed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Found ${faces.length} faces'),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Found ${faces.length} faces'),
+        duration: const Duration(seconds: 3),
+      ),
+    );
 
     // New emotion detection logic
     final faceDataQuery = await FirebaseFirestore.instance
@@ -246,53 +250,30 @@ class _MainPageState extends State<MainPage> {
 
     String emotion;
     if (windowAverage >= 0.6) {
-      emotion = 'Happy 😊';
+      emotion = 'Happy';
     } else if (windowAverage >= 0.4) {
-      emotion = 'Neutral 😐';
+      emotion = 'Neutral';
     } else {
-      emotion = 'Sad 😢';
+      emotion = 'Sad';
     }
 
-    if (!_isDisposed && mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('Mood Analysis'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Image from network URL
-              Image.network(
-                "https://res.cloudinary.com/dmf5k7o0s/image/upload/v1747596694/opatvsqqiozrdvcjl6m1.jpg", // Implement this function
-                height: 120,
-                width: 120,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const CircularProgressIndicator();
-                },
-                errorBuilder: (context, error, stackTrace) =>
-                    const Icon(Icons.error_outline),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                  'Your average mood score: ${windowAverage.toStringAsFixed(2)}\n$emotion'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+    _prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isDialogShowing = _prefs.getBool('_isDialogShowing') ?? false;
+    });
+
+    if (mounted && !_isDialogShowing) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('_isDialogShowing', true);
+
+      showEmotionDialog(context, emotion, windowAverage);
     }
   }
 
   @override
   void dispose() {
-    _isDisposed = true; // Mark as disposed first
+    _isDisposed = true;
+    _audioPlayer.dispose();
     _timer?.cancel();
     _client.close();
     _faceDetector.close();

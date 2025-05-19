@@ -38,6 +38,8 @@ dependencies:
   equatable: ^2.0.7
   flutter_markdown: ^0.7.7+1
   fl_chart: ^0.71.0
+  google_fonts: ^6.2.1
+  audioplayers: ^6.4.0
 
 dev_dependencies:
   flutter_test:
@@ -51,7 +53,6 @@ flutter:
   assets:
     - assets/icons8-air-quality-96.png
     - assets/icons8-google-96.png
-    - assets/models/mobilefacenet.tflite
     - assets/unknown-icon.jpg
     - assets/WellSync_logo.png
     - assets/bg_Card1.png
@@ -60,3 +61,9 @@ flutter:
     - assets/bg_Card4.png
     - assets/icons8-doctor.png
     - assets/plant-100.png
+    - assets/audio/careless_whisper_on_one_guitar.mp3
+    - assets/audio/electra.mp3
+    - assets/audio/narvent_distant_echoes.mp3
+    - assets/audio/piano_relaxing_sleep music.mp3
+    - assets/audio/we_can_fly.mp3
+    - assets/audio/weightless.mp3

@@ -35,7 +35,7 @@ class _HomePageState extends State<HomePage> {
 
   void _initHttpClient() {
     final httpClient = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 10)
+      ..connectionTimeout = const Duration(seconds: 60)
       ..badCertificateCallback = (cert, host, port) => true; // For testing only
     _client = IOClient(httpClient);
   }
