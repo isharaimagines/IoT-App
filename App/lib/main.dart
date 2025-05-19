@@ -6,9 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'package:iot_app/components/showEmotionDialog.dart';
+import 'package:iot_app/components/show_emotion_dialog.dart';
 import 'package:iot_app/components/sign_in_page.dart';
 import 'package:iot_app/page/chat_page.dart';
 import 'package:iot_app/page/home_page.dart';
@@ -21,6 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await dotenv.load(fileName: ".env");
 
   runApp(
     MaterialApp(

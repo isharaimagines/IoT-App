@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:iot_app/components/ChatMessage.dart';
+import 'package:iot_app/components/chat_message.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatPage extends StatefulWidget {
@@ -16,12 +17,15 @@ class _ChatPageState extends State<ChatPage> {
   final ScrollController _scrollController = ScrollController();
   late final GenerativeModel _model;
 
+  final apiKey = dotenv.env['API_KEY']!;
+  final apiModel = dotenv.env['API_MODEL']!;
+
   @override
   void initState() {
     super.initState();
     _model = GenerativeModel(
-      model: 'gemini-2.0-flash',
-      apiKey: 'AIzaSyAHiIqcNLWWefj9eUky-oNQTkbRoJJMODA',
+      model: apiModel,
+      apiKey: apiKey,
     );
   }
 
