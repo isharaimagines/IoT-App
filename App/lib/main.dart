@@ -79,8 +79,8 @@ class _MainPageState extends State<MainPage> {
   bool _isLoading = false;
   bool _isDisposed = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
-  late SharedPreferences _prefs;
   bool _isDialogShowing = false;
+  String deviceIPNetwork = '192.168.45.13';
 
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -117,9 +117,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   void _initHttpClient() {
-    final httpClient = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 20)
-      ..badCertificateCallback = (cert, host, port) => true; // For testing only
+    final httpClient = HttpClient();
     _client = IOClient(httpClient);
   }
 
@@ -130,25 +128,16 @@ class _MainPageState extends State<MainPage> {
       _isLoading = true;
     });
 
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      deviceIPNetwork = prefs.getString('deviceIPNetwork') ?? '192.168.45.13';
+    });
+
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || _isDisposed) return;
-
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('deviceip')
-          .doc(user.uid)
-          .get();
-
-      if (_isDisposed) return;
-
-      if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('ip')) {
-        return;
-      }
-
-      final storedIp = docSnapshot.data()!['ip'] as String;
-      final uri = Uri.parse('http://$storedIp/cap-image-hi.jpg');
+      final uri = Uri.parse('http://$deviceIPNetwork/cap-image-hi.jpeg');
       final response =
-          await _client.get(uri).timeout(const Duration(seconds: 8));
+          await _client.get(uri).timeout(const Duration(seconds: 12));
 
       if (response.statusCode != 200) {
         throw Exception('Invalid image response');
@@ -162,9 +151,7 @@ class _MainPageState extends State<MainPage> {
       }
     } catch (e) {
       if (!_isDisposed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error-: ${e.toString()}')),
-        );
+        _safeSetState(() => _isLoading = false);
       }
     } finally {
       if (!_isDisposed) {
@@ -182,7 +169,7 @@ class _MainPageState extends State<MainPage> {
 
   Future<List<Face>> _detectFaces(Uint8List imageBytes) async {
     final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/temp_img.jpg');
+    final file = File('${tempDir.path}/temp_img.jpeg');
     await file.writeAsBytes(imageBytes);
 
     final inputImage = InputImage.fromFilePath(file.path);
@@ -201,7 +188,6 @@ class _MainPageState extends State<MainPage> {
         .doc(user.uid)
         .collection('face_data');
 
-    // Batch write for better performance
     final batch = FirebaseFirestore.instance.batch();
 
     for (final face in faces) {
@@ -223,26 +209,12 @@ class _MainPageState extends State<MainPage> {
 
     await batch.commit();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Found ${faces.length} faces'),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-
-    // New emotion detection logic
-    final faceDataQuery = await FirebaseFirestore.instance
-        .collection('face_detections')
-        .doc(user.uid)
-        .collection('face_data')
-        .orderBy('timestamp', descending: true)
-        .limit(4)
-        .get();
+    final faceDataQuery =
+        await faceDataRef.orderBy('timestamp', descending: true).limit(4).get();
 
     final smilingProbs = faceDataQuery.docs
         .map((doc) => doc.data()['smilingProbability'] as double?)
-        .where((prob) => prob != null)
-        .cast<double>()
+        .whereType<double>()
         .toList();
 
     if (smilingProbs.isEmpty) return;
@@ -259,16 +231,16 @@ class _MainPageState extends State<MainPage> {
       emotion = 'Sad';
     }
 
-    _prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isDialogShowing = _prefs.getBool('_isDialogShowing') ?? false;
-    });
+    if (!_isDialogShowing && mounted) {
+      _isDialogShowing = true;
 
-    if (mounted && !_isDialogShowing) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('_isDialogShowing', true);
+      final done = await showEmotionDialog(context, emotion, windowAverage);
 
-      showEmotionDialog(context, emotion, windowAverage);
+      if (mounted && done) {
+        setState(() {
+          _isDialogShowing = false;
+        });
+      }
     }
   }
 

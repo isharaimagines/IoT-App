@@ -120,80 +120,48 @@ void handleConfig() {
     EEPROM.commit();
 
     Serial.println("\nData stored in EEPROM");
-
-    Serial.println("Trying to connect to Public WiFi...");
-
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();   // Clear any previous connection
     delay(100);
 
-    WiFi.begin(ssid.c_str(), password.c_str());
+    // Disconnect after getting IP
+    WiFi.disconnect(true); 
 
-    unsigned long startAttemptTime = millis();
-    const unsigned long wifiTimeout = 10000; // 10 seconds timeout
+    delay(2000);
+    Serial.println("\nRestarting.....");
+    ESP.restart();
 
-    // Wait for connection
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < wifiTimeout) {
-      delay(500);
-      Serial.print(".");
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nConnected successfully!");
-      Serial.print("Local IP Address: ");
-      Serial.println(WiFi.localIP());
-
-      // OPTIONAL: Save the obtained IP if you want
-      String localIP = WiFi.localIP().toString();
-
-      // Send IP address to Firestore
-      sendIPToFirestore(useruid, localIP, idToken);
-
-      // Disconnect after getting IP
-      WiFi.disconnect(true); 
-
-      delay(2000);
-      ESP.restart();
-
-    } else {
-      Serial.println("\nFailed to connect to WiFi!");
-      server.send(400, "text/plain", "Failed to connect to WiFi");
-    }
-
-    
   } else {
     server.send(400, "text/plain", "Missing SSID or password");
   }
 }
 
-void sendIPToFirestore(const String& useruid, const String& ipAddress, const String& idToken) {
-  if (WiFi.status() != WL_CONNECTED) return;
+// void sendIPToFirestore(const String& useruid, const String& ipAddress, const String& idToken) {
+//   if (WiFi.status() != WL_CONNECTED) return;
 
-  HTTPClient http;
+//   HTTPClient http;
 
-  // YOUR_FIREBASE_PROJECT_ID
-  String url = "https://firestore.googleapis.com/v1/projects/iot-app-25108/databases/(default)/documents/deviceip/" + useruid;
+//   // YOUR_FIREBASE_PROJECT_ID
+//   String url = "https://firestore.googleapis.com/v1/projects/iot-app-25108/databases/(default)/documents/deviceip/" + useruid;
 
-  // Build the JSON payload
-  String payload = "{\"fields\": {\"ip\": {\"stringValue\": \"" + ipAddress + "\"}}}";
+//   // Build the JSON payload
+//   String payload = "{\"fields\": {\"ip\": {\"stringValue\": \"" + ipAddress + "\"}}}";
 
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", "Bearer " + idToken); // << Add Authorization header here!
+//   http.begin(url);
+//   http.addHeader("Content-Type", "application/json");
+//   http.addHeader("Authorization", "Bearer " + idToken); // << Add Authorization header here!
 
-  int httpResponseCode = http.sendRequest("PATCH", payload);
+//   int httpResponseCode = http.sendRequest("PATCH", payload);
 
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    Serial.println("Firestore update success:");
-    Serial.println(response);
-  } else {
-    Serial.print("Firestore update failed, error: ");
-    Serial.println(httpResponseCode);
-  }
+//   if (httpResponseCode > 0) {
+//     String response = http.getString();
+//     Serial.println("Firestore update success:");
+//     Serial.println(response);
+//   } else {
+//     Serial.print("Firestore update failed, error: ");
+//     Serial.println(httpResponseCode);
+//   }
 
-  http.end();
-}
+//   http.end();
+// }
 
 void handleStatus() {
   String response;
@@ -231,8 +199,7 @@ void setup() {
   Serial.begin(115200);
   EEPROM.begin(EEPROM_SIZE);
 
-  printEEPROMContents();  // Debug EEPROM contents
-
+  printEEPROMContents();
 
   String ssid = readEEPROM(WIFI_SSID_ADDR, WIFI_SSID_LEN);
   String pass = readEEPROM(WIFI_PASS_ADDR, WIFI_PASS_LEN);

@@ -37,11 +37,9 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
     if (status.isGranted) {
       await _scanNetworks();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text('Location permission is required to scan WiFi networks')),
-      );
+      SnackBar(
+          content:
+              Text('Location permission is required to scan WiFi networks'));
     }
 
     setState(() => _isLoading = false);
@@ -65,9 +63,7 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
         }
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Check WiFi and Location service.\n$e')),
-      );
+      SnackBar(content: Text('Check WiFi and Location service.\n$e'));
     }
   }
 
@@ -87,9 +83,7 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
       return;
     }
 
-    final _idTokens = await user.getIdToken();
-
-    setState(() => idToken = _idTokens!);
+    setState(() async => idToken = (await user.getIdToken())!);
   }
 
   Future<void> _initHttpClient() async {
@@ -158,11 +152,9 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('deviceConfigured', true);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Configured...'),
-          duration: Duration(seconds: 2),
-        ),
+      const SnackBar(
+        content: Text('Configured...'),
+        duration: Duration(seconds: 2),
       );
 
       Navigator.pushReplacement(
@@ -172,11 +164,7 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
         ),
       );
     } catch (e) {
-      print('Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Errora: ${e.toString()}')),
-      );
-      rethrow;
+      SnackBar(content: Text('Errora: ${e.toString()}'));
     }
   }
 

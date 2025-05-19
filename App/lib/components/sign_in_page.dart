@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SignInPage extends StatelessWidget {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
+  SignInPage({super.key});
+
   Future<void> _signInWithGoogle(BuildContext context) async {
     try {
       // Force sign out first
@@ -27,12 +29,7 @@ class SignInPage extends StatelessWidget {
       // Save login state
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isLoggedIn', true);
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                'Sign in failed. Please connect to the Internet to continue.')),
-      );
+    } catch (e) {
       return;
     }
   }

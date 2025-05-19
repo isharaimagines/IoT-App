@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:intl/intl.dart';
 import 'package:iot_app/components/device_config_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,12 +22,12 @@ class _HomePageState extends State<HomePage> {
   Timer? _timer;
   String _isDeviceActive = 'Checking...';
   bool _isLoading = false;
+  String deviceIPNetwork = '';
 
   @override
   void initState() {
     super.initState();
     _initHttpClient();
-
     // Schedule the initial status check after the frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startGetStatus();
@@ -34,9 +35,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _initHttpClient() {
-    final httpClient = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 60)
-      ..badCertificateCallback = (cert, host, port) => true; // For testing only
+    final httpClient = HttpClient();
     _client = IOClient(httpClient);
   }
 
@@ -58,39 +57,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _checkDeviceStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      deviceIPNetwork = prefs.getString('deviceIPNetwork') ?? '192.168.45.13';
+    });
+
     if (!mounted || _isLoading) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // Your existing status check logic...
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (mounted) {
-          setState(() => _isDeviceActive = 'Not Authenticated');
-        }
-        return;
-      }
-
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('deviceip')
-          .doc(user.uid)
-          .get();
-
-      if (!mounted) return;
-
-      if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('ip')) {
-        setState(() => _isDeviceActive = 'Not Configured');
-        return;
-      }
-
-      final storedIp = docSnapshot.data()!['ip'] as String;
-      if (storedIp.isEmpty) {
-        setState(() => _isDeviceActive = 'Invalid IP');
-        return;
-      }
-
-      final uri = Uri.parse('http://$storedIp/status-100');
+      final uri = Uri.parse('http://$deviceIPNetwork/status-100');
       final response =
           await _client.get(uri).timeout(const Duration(seconds: 60));
 
@@ -273,7 +251,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Recent Activities',
+              'How do you feel today?',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,

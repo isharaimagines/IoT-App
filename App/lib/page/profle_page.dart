@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -25,6 +23,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isResetting = false;
   bool _isLoggingOut = false;
   bool _isDeleting = false;
+  String deviceIPNetwork = '';
 
   @override
   void initState() {
@@ -57,44 +56,15 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_isResetting) return;
     setState(() => _isResetting = true);
 
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      deviceIPNetwork = prefs.getString('deviceIPNetwork') ?? '192.168.45.13';
+    });
+
     try {
-      final scaffoldMessenger = ScaffoldMessenger.of(context);
-      final navigator = Navigator.of(context);
-      final prefs = await SharedPreferences.getInstance();
-
-      // Your existing status check logic...
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (mounted) {
-          scaffoldMessenger.showSnackBar(
-            const SnackBar(content: Text('Not Authenticated')),
-          );
-        }
-        return;
-      }
-
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('deviceip')
-          .doc(user.uid)
-          .get();
-
-      if (!mounted) return;
-
-      if (!docSnapshot.exists || !docSnapshot.data()!.containsKey('ip')) {
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Not Configured')),
-        );
-        return;
-      }
-
-      final storedIp = docSnapshot.data()!['ip'] as String;
-      if (storedIp.isEmpty) {
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Invalid IP')),
-        );
-        return;
-      }
-
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -150,7 +120,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
 
-      final uri = Uri.parse('http://$storedIp/reset-440');
+      final uri = Uri.parse('http://$deviceIPNetwork/reset-440');
       final response =
           await _client.get(uri).timeout(const Duration(seconds: 5));
 
@@ -173,13 +143,9 @@ class _ProfilePageState extends State<ProfilePage> {
         MaterialPageRoute(builder: (context) => const DeviceSetupPage()),
       );
     } on TimeoutException {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reset timed out')),
-      );
+      SnackBar(content: Text('Reset timed out'));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reset failed: ${e.toString()}')),
-      );
+      SnackBar(content: Text('Reset failed: ${e.toString()}'));
     } finally {
       if (mounted) setState(() => _isResetting = false);
     }

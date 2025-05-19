@@ -41,6 +41,7 @@ dependencies:
   google_fonts: ^6.2.1
   audioplayers: ^6.4.0
   flutter_dotenv: ^5.2.1
+  flutter_custom_clippers: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -52,6 +53,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - .env
     - assets/icons8-air-quality-96.png
     - assets/icons8-google-96.png
     - assets/unknown-icon.jpg
