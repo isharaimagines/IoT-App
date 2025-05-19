@@ -12,7 +12,9 @@
 ## Running the Application Locally
 
 Follow these steps to set up and run the application on your local machine:
-**_Make sure you are setup Flutter and Android SDKs_**
+**_Make sure you are setup Flutter in VS Code_**
+
+> **If not:** [Start Flutter in VS Code without Android Studio](https://medium.com/@kittisakara/start-flutter-in-vs-code-without-android-studio-d57ae92e29cd).
 
 ### 1. Clone the Repository
 
