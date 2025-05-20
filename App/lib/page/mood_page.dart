@@ -169,20 +169,12 @@ class _MoodPageState extends State<MoodPage>
                         SizedBox(height: 20),
                         Text.rich(
                           TextSpan(
-                            text: 'See Your Mental Health Insights - ',
+                            text: 'Today Insights',
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 30,
                               fontWeight: FontWeight.bold,
                               color: Colors.black,
                             ),
-                            children: [
-                              TextSpan(
-                                text: 'TODAY',
-                                style: TextStyle(
-                                  color: Colors.blueGrey,
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                       ],
@@ -284,7 +276,7 @@ class _MoodPageState extends State<MoodPage>
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Mood Key',
+                    'Insight Key',
                     style: TextStyle(
                       fontSize: 18,
                       color: Colors.grey,

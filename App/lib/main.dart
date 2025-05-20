@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:iot_app/components/show_emotion_dialog.dart';
@@ -80,7 +81,7 @@ class _MainPageState extends State<MainPage> {
   bool _isDisposed = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isDialogShowing = false;
-  String deviceIPNetwork = '192.168.45.13';
+  String deviceIPAddress = '';
 
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -90,23 +91,12 @@ class _MainPageState extends State<MainPage> {
     ),
   );
 
-  @override
-  void initState() {
-    super.initState();
-    _initHttpClient();
-    _startImageFetching();
-  }
-
   void _startImageFetching() {
-    // Cancel any existing timer
     _timer?.cancel();
-
-    // Initial fetch
     if (!_isDisposed) {
       _fetchImage();
     }
 
-    // Set up periodic fetching
     _timer = Timer.periodic(const Duration(seconds: 20), (timer) {
       if (!_isDisposed) {
         _fetchImage();
@@ -131,16 +121,21 @@ class _MainPageState extends State<MainPage> {
     final prefs = await SharedPreferences.getInstance();
 
     setState(() {
-      deviceIPNetwork = prefs.getString('deviceIPNetwork') ?? '192.168.45.13';
+      deviceIPAddress = prefs.getString('deviceIPAddress') ?? '192.168.45.13';
     });
 
     try {
-      final uri = Uri.parse('http://$deviceIPNetwork/cap-image-hi.jpeg');
+      final uri = Uri.parse('http://$deviceIPAddress/cap-image-hi.jpeg');
       final response =
           await _client.get(uri).timeout(const Duration(seconds: 12));
 
       if (response.statusCode != 200) {
-        throw Exception('Invalid image response');
+        Fluttertoast.showToast(
+          msg: "Invalid image response",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+        );
+        return;
       }
 
       final bytes = response.bodyBytes;
@@ -179,10 +174,15 @@ class _MainPageState extends State<MainPage> {
   Future<void> _handleFaceResults(List<Face> faces) async {
     if (_isDisposed || faces.isEmpty) return;
 
+    Fluttertoast.showToast(
+      msg: "Found ${faces.length} faces",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+    );
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final now = DateTime.now();
     final faceDataRef = FirebaseFirestore.instance
         .collection('face_detections')
         .doc(user.uid)
@@ -193,7 +193,7 @@ class _MainPageState extends State<MainPage> {
     for (final face in faces) {
       final docRef = faceDataRef.doc();
       batch.set(docRef, {
-        'timestamp': now.toIso8601String(),
+        'timestamp': Timestamp.fromDate(DateTime.now()),
         'boundingBox': {
           'left': face.boundingBox.left,
           'top': face.boundingBox.top,
@@ -242,6 +242,13 @@ class _MainPageState extends State<MainPage> {
         });
       }
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initHttpClient();
+    _startImageFetching();
   }
 
   @override

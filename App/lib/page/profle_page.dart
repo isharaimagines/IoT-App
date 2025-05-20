@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
@@ -23,14 +24,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isResetting = false;
   bool _isLoggingOut = false;
   bool _isDeleting = false;
-  String deviceIPNetwork = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _initHttpClient();
-    _loadNotificationPrefs();
-  }
+  String deviceIPAddress = '';
 
   void _initHttpClient() {
     final httpClient = HttpClient()
@@ -56,12 +50,11 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_isResetting) return;
     setState(() => _isResetting = true);
 
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final prefs = await SharedPreferences.getInstance();
 
     setState(() {
-      deviceIPNetwork = prefs.getString('deviceIPNetwork') ?? '192.168.45.13';
+      deviceIPAddress = prefs.getString('deviceIPAddress') ?? '192.168.45.13';
     });
 
     try {
@@ -107,20 +100,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (confirmed != true) return;
 
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Resetting device...'),
-            ],
-          ),
-          duration: Duration(seconds: 5),
-        ),
+      Fluttertoast.showToast(
+        msg: "Resetting device...",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
       );
 
-      final uri = Uri.parse('http://$deviceIPNetwork/reset-440');
+      final uri = Uri.parse('http://$deviceIPAddress/reset-440');
       final response =
           await _client.get(uri).timeout(const Duration(seconds: 5));
 
@@ -131,12 +117,10 @@ class _ProfilePageState extends State<ProfilePage> {
       await prefs.setBool('deviceConfigured', false);
       await prefs.remove('device_ip');
 
-      scaffoldMessenger.hideCurrentSnackBar();
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('Device reset successfully'),
-          backgroundColor: Colors.green,
-        ),
+      Fluttertoast.showToast(
+        msg: "Device reset successfully",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
       );
 
       navigator.pushReplacement(
@@ -212,8 +196,10 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Logout failed: ${e.toString()}')),
+        Fluttertoast.showToast(
+          msg: "Logout failed",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
         );
       }
     } finally {
@@ -285,13 +271,22 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Deletion failed: ${e.toString()}')),
+        Fluttertoast.showToast(
+          msg: "Deletion failed",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
         );
       }
     } finally {
       if (mounted) setState(() => _isDeleting = false);
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initHttpClient();
+    _loadNotificationPrefs();
   }
 
   @override

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:http/io_client.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:iot_app/main.dart';
@@ -24,6 +25,7 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
   final NetworkInfo _networkInfo = NetworkInfo();
   final _ssidController = TextEditingController();
   final _passController = TextEditingController();
+  final _ipNetController = TextEditingController();
   List<WiFiAccessPoint> _availableNetworks = [];
   bool _isLoading = false;
   String? _selectedSSID;
@@ -37,9 +39,11 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
     if (status.isGranted) {
       await _scanNetworks();
     } else {
-      SnackBar(
-          content:
-              Text('Location permission is required to scan WiFi networks'));
+      Fluttertoast.showToast(
+        msg: "Location permission is required to scan WiFi networks",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+      );
     }
 
     setState(() => _isLoading = false);
@@ -50,7 +54,12 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
       // Start scanning
       final canScan = await WiFiScan.instance.canStartScan();
       if (canScan != CanStartScan.yes) {
-        throw Exception('Cannot scan: $canScan');
+        Fluttertoast.showToast(
+          msg: "Cannot scan: $canScan",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+        );
+        return;
       }
 
       // Get scanned results
@@ -63,22 +72,21 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
         }
       });
     } catch (e) {
-      SnackBar(content: Text('Check WiFi and Location service.\n$e'));
+      Fluttertoast.showToast(
+        msg: "Check WiFi and Location service.",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+      );
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _initHttpClient();
-    _initidTokens();
   }
 
   Future<void> _initidTokens() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
+      Fluttertoast.showToast(
+        msg: "User not authenticated",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
       );
       return;
     }
@@ -103,8 +111,10 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
     // Get current user UID
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
+      Fluttertoast.showToast(
+        msg: "User not authenticated",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
       );
       return;
     }
@@ -118,8 +128,10 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
     debugPrint(encodedidToken);
 
     if (ssid.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter both SSID and password.')),
+      Fluttertoast.showToast(
+        msg: "Please enter both SSID and password.",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
       );
       return;
     }
@@ -131,11 +143,18 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
 
       if (!mounted) return;
       if (!isConnected) {
-        throw Exception('Not connected to ESP32-CAM-SETUP network');
+        Fluttertoast.showToast(
+          msg: "Not connected to ESP32-CAM-SETUP network",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+        );
+        return;
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Errorz: ${e.toString()}")),
+      Fluttertoast.showToast(
+        msg: "Errorz: ${e.toString()}",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
       );
     }
 
@@ -152,9 +171,10 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('deviceConfigured', true);
 
-      const SnackBar(
-        content: Text('Configured...'),
-        duration: Duration(seconds: 2),
+      Fluttertoast.showToast(
+        msg: "Configured...",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
       );
 
       Navigator.pushReplacement(
@@ -164,14 +184,45 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
         ),
       );
     } catch (e) {
-      SnackBar(content: Text('Errora: ${e.toString()}'));
+      Fluttertoast.showToast(
+        msg: "Errors",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+      );
     }
+  }
+
+  Future<void> _checkIPNetwork() async {
+    final ipNet = _ipNetController.text.trim();
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString('deviceIPAddress', ipNet);
+    Fluttertoast.showToast(
+      msg: "Saved",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+    );
+  }
+
+  Future<void> _loadDeviceIPAddress() async {
+    final prefs = await SharedPreferences.getInstance();
+    final storedIP = prefs.getString('deviceIPAddress') ?? '';
+    _ipNetController.text = storedIP;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initHttpClient();
+    _initidTokens();
+    _loadDeviceIPAddress();
   }
 
   @override
   void dispose() {
     _ssidController.dispose();
     _passController.dispose();
+    _ipNetController.dispose();
     super.dispose();
   }
 
@@ -213,11 +264,7 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
 
                     SizedBox(
                       width: double.maxFinite,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(
-                          Icons.wifi,
-                          color: Colors.black,
-                        ),
+                      child: ElevatedButton.icon(
                         label: const Text(
                           'Open Wi-Fi Settings',
                           style: TextStyle(
@@ -230,6 +277,7 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                               type: AppSettingsType.wifi);
                         },
                         style: ElevatedButton.styleFrom(
+                          backgroundColor: Color.fromRGBO(200, 230, 201, 1),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(
@@ -332,22 +380,24 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                       ),
                       obscureText: _obscurePassword,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
 
                     // Config Button
                     SizedBox(
                       width: double.maxFinite,
-                      child: OutlinedButton(
+                      child: ElevatedButton(
                         onPressed: _sendWiFiCredentials,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color.fromRGBO(200, 230, 201, 1),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(100),
                           ),
                           foregroundColor: Colors.black,
                         ),
                         child: const Text(
-                          "Config IoT Device",
+                          "Configure Device",
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.black,
@@ -356,6 +406,49 @@ class _DeviceSetupPageState extends State<DeviceSetupPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
+
+                    // Section 3: IP Network Configure
+                    const Text(
+                      '3. Select your IP Address',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 24),
+
+                    TextField(
+                      controller: _ipNetController,
+                      decoration: InputDecoration(
+                        labelText: "Device IP Address",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(100)),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    SizedBox(
+                      width: double.maxFinite,
+                      child: ElevatedButton(
+                        onPressed: _checkIPNetwork,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color.fromRGBO(200, 230, 201, 1),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          foregroundColor: Colors.black,
+                        ),
+                        child: const Text(
+                          "Save",
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
 
                     // Loading Indicator
                     if (_isChecking)

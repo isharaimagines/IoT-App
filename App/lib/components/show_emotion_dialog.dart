@@ -1,6 +1,10 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
+
+import 'package:fluttertoast/fluttertoast.dart';
 
 final AudioPlayer _audioPlayer = AudioPlayer();
 
@@ -40,15 +44,10 @@ String getRandomImage() {
   return images[randomIndex];
 }
 
-List<Color> _getGradientColors(String emotion) {
-  switch (emotion.toLowerCase()) {
-    case 'Happy':
-      return [Colors.orangeAccent, Colors.pinkAccent];
-    case 'Sad':
-      return [Colors.blue, Colors.purple];
-    default:
-      return [Colors.teal, Colors.greenAccent];
-  }
+List<Color> _getGradientColors(double score) {
+  if (score > 0.6) return [Colors.orangeAccent, Colors.pinkAccent];
+  if (score >= 0.4) return [Colors.blue, Colors.purple];
+  return [Colors.teal, Colors.greenAccent];
 }
 
 Color _getScoreColor(double score) {
@@ -61,6 +60,62 @@ String _formatDuration(Duration duration) {
   final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
   final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
   return '$minutes:$seconds';
+}
+
+Future<void> _saveCurrentMeditation(
+    String emotion, double windowAverage) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  final faceDataRef = FirebaseFirestore.instance
+      .collection('recent')
+      .doc(user.uid)
+      .collection('activities');
+
+  final batch = FirebaseFirestore.instance.batch();
+
+  String tag;
+  String title;
+  String about;
+
+  if (windowAverage >= 0.7) {
+    tag = 'happy';
+    title = 'You’re Glowing With Joy Today!';
+    about =
+        "You're radiating positivity today! Embrace this joyful energy and share it with the world. Keep doing what lifts your spirit — you're on a beautiful path.";
+  } else if (windowAverage >= 0.5) {
+    tag = 'neutral';
+    title = 'Peaceful Pause — Your Balance Is Beautiful.';
+    about =
+        "You're steady and grounded right now. It’s a good time to breathe deeply, reflect, and recharge. Your calm presence is your strength.";
+  } else if (windowAverage >= 0.2) {
+    tag = 'sad';
+    title = "It's Okay To Feel Low — You’re Not Alone.";
+    about =
+        "It's okay to feel a bit down. These moments pass, and they make room for growth. Be kind to yourself, and take time to rest or talk to someone you trust.";
+  } else {
+    tag = 'angry';
+    title = 'Feeling Tense — Maybe Take A Break';
+    about =
+        'Tension can be heavy — acknowledge it, and let it go with slow, deep breaths. You have the power to turn this moment into clarity and control.';
+  }
+
+  final docRef = faceDataRef.doc();
+  batch.set(docRef, {
+    'addtime': Timestamp.fromDate(DateTime.now()),
+    'tag': tag,
+    'emotionScore': windowAverage,
+    'title': title,
+    'about': about,
+  });
+
+  await batch.commit();
+
+  Fluttertoast.showToast(
+    msg: "Updating...",
+    toastLength: Toast.LENGTH_SHORT,
+    gravity: ToastGravity.BOTTOM,
+  );
 }
 
 Future<bool> showEmotionDialog(
@@ -83,7 +138,11 @@ Future<bool> showEmotionDialog(
         try {
           await _audioPlayer.play(AssetSource(songPath));
         } catch (e) {
-          SnackBar(content: Text('Error playing audio: $e'));
+          Fluttertoast.showToast(
+            msg: "Error playing audio",
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+          );
         }
       });
 
@@ -93,7 +152,7 @@ Future<bool> showEmotionDialog(
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: _getGradientColors(emotion),
+                colors: _getGradientColors(windowAverage),
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -258,6 +317,7 @@ Future<bool> showEmotionDialog(
                     ),
                     onPressed: () async {
                       await _audioPlayer.stop();
+                      await _saveCurrentMeditation(emotion, windowAverage);
                       Navigator.of(context).pop(true);
                     },
                   ),

@@ -22,17 +22,7 @@ class _HomePageState extends State<HomePage> {
   Timer? _timer;
   String _isDeviceActive = 'Checking...';
   bool _isLoading = false;
-  String deviceIPNetwork = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _initHttpClient();
-    // Schedule the initial status check after the frame is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startGetStatus();
-    });
-  }
+  String deviceIPAddress = '';
 
   void _initHttpClient() {
     final httpClient = HttpClient();
@@ -40,13 +30,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _startGetStatus() {
-    // Cancel any existing timer
     _timer?.cancel();
-
-    // Immediate check
     _checkDeviceStatus();
 
-    // Periodic checks
     _timer = Timer.periodic(const Duration(seconds: 60), (timer) {
       if (mounted) {
         _checkDeviceStatus();
@@ -60,7 +46,7 @@ class _HomePageState extends State<HomePage> {
     final prefs = await SharedPreferences.getInstance();
 
     setState(() {
-      deviceIPNetwork = prefs.getString('deviceIPNetwork') ?? '192.168.45.13';
+      deviceIPAddress = prefs.getString('deviceIPAddress') ?? '192.168.45.13';
     });
 
     if (!mounted || _isLoading) return;
@@ -68,7 +54,7 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isLoading = true);
 
     try {
-      final uri = Uri.parse('http://$deviceIPNetwork/status-100');
+      final uri = Uri.parse('http://$deviceIPAddress/status-100');
       final response =
           await _client.get(uri).timeout(const Duration(seconds: 60));
 
@@ -83,24 +69,11 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() => _isDeviceActive = 'Timeout');
     } catch (e) {
       if (mounted) setState(() => _isDeviceActive = 'Error');
-      debugPrint('Status check error: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  @override
-  void dispose() {
-    // Cancel the timer first
-    _timer?.cancel();
-    _timer = null;
-
-    // Close the HTTP client
-    _client.close();
-
-    super.dispose();
   }
 
   Color _getStatusColor() {
@@ -115,6 +88,24 @@ class _HomePageState extends State<HomePage> {
       default:
         return Colors.grey;
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initHttpClient();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startGetStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
+    _isLoading = false;
+    _client.close();
+    super.dispose();
   }
 
   @override
@@ -249,15 +240,11 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 24),
             const Text(
-              'How do you feel today?',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              'Today Insight',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 8),
             Expanded(
               child: user == null
                   ? const Center(
@@ -298,7 +285,7 @@ class _HomePageState extends State<HomePage> {
                             return Card(
                               margin: const EdgeInsets.symmetric(vertical: 6),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                               color: getColorForTag(data['tag']),
                               child: Stack(
