@@ -117,11 +117,11 @@ class _HomePageState extends State<HomePage> {
 
     String getImageForTag(String? tag) {
       switch (tag?.toLowerCase()) {
-        case 'happy':
+        case 'genuine happiness':
           return 'assets/bg_Card2.png';
-        case 'sad':
+        case 'moderate happiness':
           return 'assets/bg_Card1.png';
-        case 'anger':
+        case 'uncomfortable':
           return 'assets/bg_Card3.png';
         default:
           return 'assets/bg_Card4.png';
@@ -130,14 +130,14 @@ class _HomePageState extends State<HomePage> {
 
     Color getColorForTag(String? tag) {
       switch (tag?.toLowerCase()) {
-        case 'happy':
-          return Colors.yellow.shade50;
-        case 'sad':
-          return Colors.blue.shade50;
-        case 'anger':
-          return Colors.red.shade50;
+        case 'genuine happiness':
+          return Colors.yellow.shade100;
+        case 'moderate happiness':
+          return Colors.blueAccent.shade100;
+        case 'uncomfortable':
+          return Colors.green.shade50;
         default:
-          return Colors.grey.shade50;
+          return Colors.blueGrey.shade50;
       }
     }
 
@@ -159,14 +159,13 @@ class _HomePageState extends State<HomePage> {
               title: Text(
                 user?.displayName ?? 'Guest',
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               subtitle: const Text(
                 'How are you today?',
                 style: TextStyle(
-                  fontSize: 18,
                   color: Colors.grey,
                 ),
               ),
@@ -186,7 +185,7 @@ class _HomePageState extends State<HomePage> {
                   title: const Text(
                     'MY SMART POT',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -194,7 +193,7 @@ class _HomePageState extends State<HomePage> {
                     _isDeviceActive,
                     style: TextStyle(
                       color: _getStatusColor(),
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   trailing: _isLoading
@@ -230,7 +229,7 @@ class _HomePageState extends State<HomePage> {
                                       : 'Connect',
                                   style: const TextStyle(
                                     color: Colors.black,
-                                    fontSize: 16,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ],
@@ -243,7 +242,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 24),
             const Text(
               'Today Insight',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 40, fontWeight: FontWeight.normal),
             ),
             Expanded(
               child: user == null

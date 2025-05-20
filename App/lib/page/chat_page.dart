@@ -116,7 +116,7 @@ class _ChatPageState extends State<ChatPage> {
               : isUser
                   ? const Color.fromRGBO(146, 227, 169, 1)
                   : Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             if (!isError)
               const BoxShadow(
@@ -211,6 +211,15 @@ class _ChatPageState extends State<ChatPage> {
                     controller: _controller,
                     decoration: const InputDecoration(
                       hintText: 'How can I help you?',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(100)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(100)),
+                        borderSide: BorderSide(
+                            color: Color.fromARGB(
+                                255, 200, 230, 201)), // Set your desired color
+                      ),
                     ),
                   ),
                 ),
@@ -218,7 +227,14 @@ class _ChatPageState extends State<ChatPage> {
                 IconButton(
                   icon: const Icon(Icons.send),
                   onPressed: _sendMessage,
-                  color: const Color.fromRGBO(146, 227, 169, 1),
+                  color: Colors.black,
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color.fromARGB(255, 200, 230, 201),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    padding: const EdgeInsets.all(14),
+                  ),
                 ),
               ],
             ),

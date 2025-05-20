@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,7 +17,7 @@ class _MoodPageState extends State<MoodPage>
   late AnimationController _controller;
   late Animation<double> _animation;
   List<FlSpot> _moodData = [];
-  double _maxY = 10;
+  double _maxY = 1.2;
 
   @override
   void initState() {
@@ -36,15 +38,15 @@ class _MoodPageState extends State<MoodPage>
     if (user == null) return;
 
     final snapshot = await FirebaseFirestore.instance
-        .collection('moods')
+        .collection('recent')
         .doc(user.uid)
-        .collection('entries')
-        .orderBy('time', descending: true)
+        .collection('activities')
+        .orderBy('addtime', descending: true)
         .get();
 
-    final data = snapshot.docs.map((doc) {
-      final time = doc['time'] as Timestamp;
-      final point = (doc['point'] as num).toDouble();
+    final data = snapshot.docs.reversed.map((doc) {
+      final time = doc['addtime'] as Timestamp;
+      final point = (doc['emotionScore'] as num).toDouble();
 
       return FlSpot(
         time.toDate().millisecondsSinceEpoch.toDouble(),
@@ -55,8 +57,13 @@ class _MoodPageState extends State<MoodPage>
     if (mounted) {
       setState(() {
         _moodData = data;
-        _maxY = 20;
+        // Inside _fetchMoodData after getting data
+        _maxY = (data.isEmpty)
+            ? 1.05
+            : (data.map((spot) => spot.y).reduce(max) * 1.05);
       });
+      _controller.reset();
+      _controller.forward();
     }
   }
 
@@ -71,30 +78,15 @@ class _MoodPageState extends State<MoodPage>
   BarChartGroupData _makeBar(int index, FlSpot spot) {
     final double value = spot.y;
     final Color barColor;
-    final Color backBarColor;
 
-    if (value <= 5) {
-      barColor = Colors.purple.shade200;
-    } else if (value <= 9) {
-      barColor = Colors.orange.shade200;
-    } else if (value == 10) {
-      barColor = Colors.grey.shade300;
-    } else if (value <= 15) {
-      barColor = Colors.yellow.shade200;
+    if (value >= 0.8) {
+      barColor = Colors.yellow;
+    } else if (value >= 0.5) {
+      barColor = Colors.blueAccent;
+    } else if (value > 0.2) {
+      barColor = Colors.greenAccent;
     } else {
-      barColor = Colors.green.shade200;
-    }
-
-    if (value <= 5) {
-      backBarColor = Colors.purple.shade50;
-    } else if (value <= 9) {
-      backBarColor = Colors.orange.shade50;
-    } else if (value == 10) {
-      backBarColor = Colors.grey.shade50;
-    } else if (value <= 15) {
-      backBarColor = Colors.yellow.shade50;
-    } else {
-      backBarColor = Colors.green.shade50;
+      barColor = Colors.blueGrey;
     }
 
     return BarChartGroupData(
@@ -103,11 +95,14 @@ class _MoodPageState extends State<MoodPage>
         BarChartRodData(
           toY: value * _animation.value,
           color: barColor,
-          borderRadius: BorderRadius.circular(20),
-          width: 20,
+          width: 30,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(100)),
           backDrawRodData: BackgroundBarChartRodData(
-              show: true, toY: _maxY, color: backBarColor),
-        ),
+            show: true,
+            toY: _maxY,
+            color: barColor.withOpacity(0.2),
+          ),
+        )
       ],
     );
   }
@@ -136,165 +131,155 @@ class _MoodPageState extends State<MoodPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(12),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(18),
         child: _moodData.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(height: 24),
-                  Text(
-                    'WellSync Score',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  if (_moodData.isNotEmpty)
-                    Text(
-                      'Latest Mood: ${_moodData.first.y.toStringAsFixed(1)}',
+
+                  Center(
+                    child: Text(
+                      'Today',
                       style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey,
+                        fontSize: 16,
+                        color: Colors.black,
                       ),
                     ),
-                  // Title and Subtitle
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(height: 20),
-                        Text.rich(
-                          TextSpan(
-                            text: 'Today Insights',
-                            style: TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  Text(
+                    'Today Insight',
+                    style: TextStyle(
+                      fontSize: 40,
+                      color: Colors.black,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Establishing consistent sleep patterns is essential for enhancing your overall well-being. By prioritizing a regular sleep schedule, you can significantly boost your mood and energy levels.',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   // Chart
                   SizedBox(
                     height: MediaQuery.of(context).size.height * 0.5,
-                    child: AnimatedBuilder(
-                      animation: _animation,
-                      builder: (context, _) {
-                        return BarChart(
-                          BarChartData(
-                            barTouchData: BarTouchData(
-                              enabled: true,
-                              touchTooltipData: BarTouchTooltipData(
-                                getTooltipColor: (group) => Colors.black87,
-                                getTooltipItem:
-                                    (group, groupIndex, rod, rodIndex) {
-                                  final date =
-                                      DateTime.fromMillisecondsSinceEpoch(
-                                          group.x.toInt());
-                                  return BarTooltipItem(
-                                    '${date.hour}:${date.minute.toString().padLeft(2, '0')}\nMood: ${rod.toY.toStringAsFixed(1)}',
-                                    const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      height: 1.4,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: SizedBox(
+                        width: _moodData.length * 40, // Adjust width per bar
+
+                        child: AnimatedBuilder(
+                          animation: _animation,
+                          builder: (context, _) {
+                            return BarChart(
+                              BarChartData(
+                                barTouchData: BarTouchData(
+                                  enabled: true,
+                                  touchTooltipData: BarTouchTooltipData(
+                                    getTooltipColor: (group) =>
+                                        Colors.grey.shade100,
+                                    getTooltipItem:
+                                        (group, groupIndex, rod, rodIndex) {
+                                      final date =
+                                          DateTime.fromMillisecondsSinceEpoch(
+                                              group.x.toInt());
+                                      return BarTooltipItem(
+                                        '${date.hour}:${date.minute.toString().padLeft(2, '0')}\nInsight: ${rod.toY.toStringAsFixed(2)}',
+                                        const TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 12,
+                                          height: 1.4,
+                                        ),
+                                      );
+                                    },
+                                    maxContentWidth: 120,
+                                    fitInsideHorizontally: true,
+                                    tooltipPadding: const EdgeInsets.all(8),
+                                  ),
+                                ),
+                                titlesData: FlTitlesData(
+                                  show: true,
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: _buildTimeTitles,
+                                      reservedSize: 36,
+                                      interval: 3600000,
                                     ),
-                                  );
-                                },
-                                maxContentWidth: 120,
-                                fitInsideHorizontally: true,
-                                tooltipPadding: const EdgeInsets.all(8),
-                              ),
-                            ),
-                            titlesData: FlTitlesData(
-                              show: true,
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  getTitlesWidget: _buildTimeTitles,
-                                  reservedSize: 36,
-                                  interval: 3600000, // 1 hour in milliseconds
+                                  ),
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      reservedSize: 28,
+                                      interval: 0.2,
+                                      getTitlesWidget: (value, meta) {
+                                        return Text(
+                                          value.toStringAsFixed(1),
+                                          style: const TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 12,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  rightTitles: const AxisTitles(),
+                                  topTitles: const AxisTitles(),
                                 ),
-                              ),
-                              leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  reservedSize: 40,
-                                  getTitlesWidget: (value, meta) {
-                                    return Text(
-                                      value.toInt().toString(),
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 12,
-                                      ),
-                                    );
-                                  },
-                                  interval: 2,
+                                borderData: FlBorderData(
+                                  show: true,
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              rightTitles: const AxisTitles(),
-                              topTitles: const AxisTitles(),
-                            ),
-                            borderData: FlBorderData(
-                              show: true,
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.grey.shade300,
-                                  width: 1,
+                                barGroups: _moodData
+                                    .asMap()
+                                    .entries
+                                    .map((e) => _makeBar(e.key, e.value))
+                                    .toList(),
+                                gridData: FlGridData(
+                                  show: true,
+                                  drawVerticalLine: false,
+                                  horizontalInterval: 0.2,
+                                  getDrawingHorizontalLine: (value) => FlLine(
+                                    color: Colors.grey.shade300,
+                                    strokeWidth: 1,
+                                  ),
                                 ),
+                                maxY: _maxY,
+                                minY: 0,
+                                alignment: BarChartAlignment.spaceAround,
+                                groupsSpace: 8,
+                                backgroundColor: Colors.transparent,
                               ),
-                            ),
-                            barGroups: _moodData
-                                .asMap()
-                                .entries
-                                .map((e) => _makeBar(e.key, e.value))
-                                .toList(),
-                            gridData: FlGridData(
-                              show: true,
-                              drawVerticalLine: false,
-                              horizontalInterval: 2,
-                              getDrawingHorizontalLine: (value) => FlLine(
-                                color: Colors.grey.shade300,
-                                strokeWidth: 1,
-                              ),
-                            ),
-                            maxY: 20,
-                            minY: 0,
-                            alignment: BarChartAlignment.spaceAround,
-                            groupsSpace: 0,
-                            backgroundColor: Colors.transparent,
-                          ),
-                        );
-                      },
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    'Insight Key',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(
-                      height: 12), // spacing between chart and legend
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildLegendItem(Colors.purple.shade200, 'ANGRY'),
-                      _buildLegendItem(Colors.orange.shade200, 'SAD'),
-                      _buildLegendItem(Colors.grey.shade300, 'NEUTRAL'),
-                      _buildLegendItem(Colors.yellow.shade200, 'HAPPY'),
-                      _buildLegendItem(Colors.green.shade200, 'ENJOY'),
+                      _buildLegendItem(Colors.blueGrey, 'Sad'),
+                      _buildLegendItem(Colors.greenAccent, 'Neutral'),
+                      _buildLegendItem(Colors.blueAccent, 'Happy'),
+                      _buildLegendItem(Colors.yellow, 'Joy'),
                     ],
-                  ),
+                  )
                 ],
               ),
       ),

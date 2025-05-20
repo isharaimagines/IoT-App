@@ -3,33 +3,36 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
-
 import 'package:fluttertoast/fluttertoast.dart';
 
 final AudioPlayer _audioPlayer = AudioPlayer();
 
 final Map<String, String> emotionSongs = {
-  'Happy': 'audio/electra.mp3',
-  'Sad': 'audio/we_can_fly.mp3',
-  'Neutral': 'audio/weightless.mp3',
-  'Chill': 'audio/careless_whisper_on_one_guitar.mp3',
-  'Energetic': 'audio/narvent_distant_echoes.mp3',
-  'Sleep': 'audio/piano_relaxing_sleep music.mp3'
+  '1': 'audio/electra.mp3',
+  '2': 'audio/we_can_fly.mp3',
+  '3': 'audio/weightless.mp3',
+  '4': 'audio/careless_whisper_on_one_guitar.mp3',
+  '5': 'audio/narvent_distant_echoes.mp3',
+  '6': 'audio/piano_relaxing_sleep music.mp3'
 };
 
 final Map<String, String> emotionImages = {
-  'Happy':
+  '1':
       'https://res.cloudinary.com/dmf5k7o0s/image/upload/nlcytumjpgsyok3iizcm.jpg',
-  'Sad':
+  '2':
       'https://res.cloudinary.com/dmf5k7o0s/image/upload/xy2tdgexykegexc4bat3.jpg',
-  'Neutral':
+  '3':
       'https://res.cloudinary.com/dmf5k7o0s/image/upload/j7wxl8fhyrekcxyevnny.jpg',
-  'Chill':
+  '4':
       'https://res.cloudinary.com/dmf5k7o0s/image/upload/cra49mjuzfclslbnzxny.jpg',
-  'Energetic':
+  '5':
       'https://res.cloudinary.com/dmf5k7o0s/image/upload/rce30elpokbpchsqmgkp.jpg',
-  'Sleep':
-      'https://res.cloudinary.com/dmf5k7o0s/image/upload/nlcytumjpgsyok3iizcm.jpg'
+  '6':
+      'https://res.cloudinary.com/dmf5k7o0s/image/upload/nlcytumjpgsyok3iizcm.jpg',
+  '7':
+      'https://res.cloudinary.com/dmf5k7o0s/image/upload/cogiklrjkqircc22ksh8.jpg',
+  '8':
+      'https://res.cloudinary.com/dmf5k7o0s/image/upload/gdtbsq5hwbcy0umxuwre.jpg'
 };
 
 String getRandomSong() {
@@ -45,15 +48,25 @@ String getRandomImage() {
 }
 
 List<Color> _getGradientColors(double score) {
-  if (score > 0.6) return [Colors.orangeAccent, Colors.pinkAccent];
-  if (score >= 0.4) return [Colors.blue, Colors.purple];
-  return [Colors.teal, Colors.greenAccent];
+  if (score >= 0.8) {
+    return [
+      Colors.yellowAccent,
+      Colors.deepOrangeAccent
+    ]; // bright and energetic
+  }
+  if (score >= 0.5) {
+    return [Colors.blueAccent, Colors.greenAccent]; // fresh and cheerful
+  }
+  if (score >= 0.2) {
+    return [Colors.green, Colors.cyan]; // calm and thoughtful
+  }
+  return [Colors.grey, Colors.blueGrey]; // subdued and neutral
 }
 
 Color _getScoreColor(double score) {
-  if (score > 0.6) return Colors.orange;
-  if (score >= 0.4) return Colors.lightBlue;
-  return Colors.green;
+  if (score > 0.6) return Colors.grey.shade100;
+  if (score >= 0.4) return Colors.grey.shade100;
+  return Colors.grey.shade100;
 }
 
 String _formatDuration(Duration duration) {
@@ -78,23 +91,23 @@ Future<void> _saveCurrentMeditation(
   String title;
   String about;
 
-  if (windowAverage >= 0.7) {
-    tag = 'happy';
+  if (windowAverage >= 0.8) {
+    tag = 'genuine happiness';
     title = 'You’re Glowing With Joy Today!';
     about =
         "You're radiating positivity today! Embrace this joyful energy and share it with the world. Keep doing what lifts your spirit — you're on a beautiful path.";
   } else if (windowAverage >= 0.5) {
-    tag = 'neutral';
+    tag = 'moderate happiness';
     title = 'Peaceful Pause — Your Balance Is Beautiful.';
     about =
         "You're steady and grounded right now. It’s a good time to breathe deeply, reflect, and recharge. Your calm presence is your strength.";
   } else if (windowAverage >= 0.2) {
-    tag = 'sad';
+    tag = 'uncomfortable';
     title = "It's Okay To Feel Low — You’re Not Alone.";
     about =
         "It's okay to feel a bit down. These moments pass, and they make room for growth. Be kind to yourself, and take time to rest or talk to someone you trust.";
   } else {
-    tag = 'angry';
+    tag = 'sad';
     title = 'Feeling Tense — Maybe Take A Break';
     about =
         'Tension can be heavy — acknowledge it, and let it go with slow, deep breaths. You have the power to turn this moment into clarity and control.';
@@ -125,208 +138,227 @@ Future<bool> showEmotionDialog(
   Duration totalDuration = Duration.zero;
 
   return await showDialog<bool>(
-    context: context,
-    barrierDismissible: true,
-    builder: (context) {
-      bool isPlaying = true;
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        bool isPlaying = true;
 
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        _audioPlayer.onDurationChanged.listen((Duration d) {
-          totalDuration = d;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          _audioPlayer.onDurationChanged.listen((Duration d) {
+            totalDuration = d;
+          });
+
+          try {
+            await _audioPlayer.play(AssetSource(songPath));
+          } catch (e) {
+            Fluttertoast.showToast(
+              msg: "Error playing audio",
+              toastLength: Toast.LENGTH_SHORT,
+              gravity: ToastGravity.BOTTOM,
+            );
+          }
         });
 
-        try {
-          await _audioPlayer.play(AssetSource(songPath));
-        } catch (e) {
-          Fluttertoast.showToast(
-            msg: "Error playing audio",
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-          );
-        }
-      });
-
-      return StatefulBuilder(
-        builder: (context, setState) => Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: _getGradientColors(windowAverage),
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    style: TextButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    onPressed: () async {
-                      await _audioPlayer.stop();
-                      Navigator.of(context).pop(true);
-                    },
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Text(
-                          'MEDITATION',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Icon(
-                          Icons.playlist_play_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ],
-                    ),
+        return StatefulBuilder(
+          builder: (context, setState) => WillPopScope(
+            onWillPop: () async {
+              await _audioPlayer.stop();
+              await _saveCurrentMeditation(emotion, windowAverage);
+              return true;
+            },
+            child: Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _getGradientColors(windowAverage),
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ),
-                const SizedBox(height: 10),
-                ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Image.network(
-                    imagePath,
-                    height: 250,
-                    width: double.maxFinite,
-                    fit: BoxFit.fill,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return const SizedBox(
-                        height: 150,
-                        width: 150,
-                        child: Center(
-                            child:
-                                CircularProgressIndicator(color: Colors.white)),
-                      );
-                    },
-                  ),
                 ),
-                const SizedBox(height: 15),
-                const Text(
-                  'Personalized Insights',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-                const SizedBox(height: 15),
-                StreamBuilder<Duration>(
-                  stream: _audioPlayer.onPositionChanged,
-                  builder: (context, snapshot) {
-                    final position = snapshot.data ?? Duration.zero;
-                    final duration = totalDuration;
-
-                    return Column(
-                      children: [
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 6),
-                            overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 12),
-                            activeTrackColor: Colors.white,
-                            inactiveTrackColor: Colors.white38,
-                            thumbColor: _getScoreColor(windowAverage),
-                          ),
-                          child: Slider(
-                            min: 0,
-                            max: duration.inMilliseconds.toDouble(),
-                            value: position.inMilliseconds
-                                .clamp(0, duration.inMilliseconds)
-                                .toDouble(),
-                            onChanged: (value) async {
-                              await _audioPlayer
-                                  .seek(Duration(milliseconds: value.toInt()));
-                            },
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                _formatDuration(position),
-                                style: const TextStyle(
-                                    color: Colors.white70, fontSize: 12),
+                        onPressed: () async {
+                          await _audioPlayer.stop();
+                          await _saveCurrentMeditation(emotion, windowAverage);
+                          Navigator.of(context).pop(true);
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            Text(
+                              'MEDITATION',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
-                              Text(
-                                _formatDuration(duration),
-                                style: const TextStyle(
-                                    color: Colors.white70, fontSize: 12),
+                            ),
+                            Icon(
+                              Icons.playlist_play_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.network(
+                        imagePath,
+                        height: 250,
+                        width: double.maxFinite,
+                        fit: BoxFit.fill,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return const SizedBox(
+                            height: 150,
+                            width: 150,
+                            child: Center(
+                                child: CircularProgressIndicator(
+                                    color: Colors.white)),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    const Text(
+                      'Personalized Insights',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(height: 15),
+                    StreamBuilder<Duration>(
+                      stream: _audioPlayer.onPositionChanged,
+                      builder: (context, snapshot) {
+                        final position = snapshot.data ?? Duration.zero;
+                        final duration = totalDuration;
+
+                        return Column(
+                          children: [
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 6),
+                                overlayShape: const RoundSliderOverlayShape(
+                                    overlayRadius: 12),
+                                activeTrackColor: Colors.white,
+                                inactiveTrackColor: Colors.white38,
+                                thumbColor: _getScoreColor(windowAverage),
                               ),
-                            ],
+                              child: Slider(
+                                min: 0,
+                                max: duration.inMilliseconds.toDouble(),
+                                value: position.inMilliseconds
+                                    .clamp(0, duration.inMilliseconds)
+                                    .toDouble(),
+                                onChanged: (value) async {
+                                  await _audioPlayer.seek(
+                                      Duration(milliseconds: value.toInt()));
+                                },
+                              ),
+                            ),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _formatDuration(position),
+                                    style: const TextStyle(
+                                        color: Colors.white70, fontSize: 12),
+                                  ),
+                                  Text(
+                                    _formatDuration(duration),
+                                    style: const TextStyle(
+                                        color: Colors.white70, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 40,
                           ),
+                          style: TextButton.styleFrom(
+                            backgroundColor: Colors.white24,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(100)),
+                          ),
+                          onPressed: () async {
+                            if (isPlaying) {
+                              await _audioPlayer.pause();
+                            } else {
+                              await _audioPlayer.resume();
+                            }
+                            setState(() {
+                              isPlaying = !isPlaying;
+                            });
+                          },
                         ),
                       ],
-                    );
-                  },
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: Colors.white,
-                        size: 40,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.maxFinite,
+                      child: TextButton.icon(
+                        icon:
+                            const Icon(Icons.check_circle, color: Colors.white),
+                        label: const Text('Got it!',
+                            style:
+                                TextStyle(color: Colors.white, fontSize: 18)),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.white24,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                        ),
+                        onPressed: () async {
+                          await _audioPlayer.stop();
+                          await _saveCurrentMeditation(emotion, windowAverage);
+                          Navigator.of(context).pop(true);
+                        },
                       ),
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.white24,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(100)),
-                      ),
-                      onPressed: () async {
-                        if (isPlaying) {
-                          await _audioPlayer.pause();
-                        } else {
-                          await _audioPlayer.resume();
-                        }
-                        setState(() {
-                          isPlaying = !isPlaying;
-                        });
-                      },
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.maxFinite,
-                  child: TextButton.icon(
-                    icon: const Icon(Icons.check_circle, color: Colors.white),
-                    label: const Text('Got it!',
-                        style: TextStyle(color: Colors.white, fontSize: 18)),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.white24,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                    ),
-                    onPressed: () async {
-                      await _audioPlayer.stop();
-                      await _saveCurrentMeditation(emotion, windowAverage);
-                      Navigator.of(context).pop(true);
-                    },
-                  ),
-                ),
-              ],
+              ),
+
+              ////////////////
             ),
           ),
-        ),
-      );
-    },
-  ).then((value) => value == true);
+        );
+      }).then((value) async {
+    if (value != true) {
+      await _audioPlayer.stop();
+      await _saveCurrentMeditation(emotion, windowAverage);
+    }
+    return value == true;
+  });
 }

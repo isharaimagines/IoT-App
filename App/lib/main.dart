@@ -223,12 +223,14 @@ class _MainPageState extends State<MainPage> {
         smilingProbs.reduce((a, b) => a + b) / smilingProbs.length;
 
     String emotion;
-    if (windowAverage >= 0.6) {
-      emotion = 'Happy';
-    } else if (windowAverage >= 0.4) {
-      emotion = 'Neutral';
+    if (windowAverage >= 0.8) {
+      emotion = 'genuine happiness';
+    } else if (windowAverage >= 0.5) {
+      emotion = 'moderate happiness';
+    } else if (windowAverage >= 0.2) {
+      emotion = 'uncomfortable';
     } else {
-      emotion = 'Sad';
+      emotion = 'sad';
     }
 
     if (!_isDialogShowing && mounted) {
