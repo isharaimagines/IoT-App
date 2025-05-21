@@ -87,7 +87,7 @@ Follow the steps below to install and use the application directly on your Andro
 
 Download the APK file from the provided OneDrive link directly to your smartphone:
 
-[Download APK](https://liveplymouthac-my.sharepoint.com/:f:/g/personal/10898919_students_plymouth_ac_uk/E-sHvKDCYDEtIplFP-bXBOAcB7uyjTKmh-z2ZwjwKdB8dAg?e=IaqX8P)
+[Download APK](https://liveplymouthac-my.sharepoint.com/:f:/g/personal/10898919_students_plymouth_ac_uk/EsHvKDCYDEtIplFP-bXBOAcB7uyjTKmh-z2ZwjwKdB8dAg?e=IaqX8P)
 
 > **Note:** Minimum supported Android version is **10**.
 
