@@ -282,6 +282,46 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _showIntervalDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    final TextEditingController controller = TextEditingController(
+      text: (prefs.getInt('fetchIntervalSeconds')).toString(),
+    );
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Smart Pot Interval'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Interval (seconds)',
+            hintText: 'Enter time in seconds',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+
+              final seconds = int.tryParse(controller.text) ?? 20;
+              await prefs.setInt('fetchIntervalSeconds', seconds);
+
+              Navigator.pop(context);
+              // Restart timer with new duration
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -377,6 +417,14 @@ class _ProfilePageState extends State<ProfilePage> {
               icon: Icons.restart_alt,
               label: 'Reset Smart Pot',
               onPressed: _resetESP32,
+              isLoading: _isResetting,
+              color: Colors.black,
+            ),
+            const SizedBox(height: 8),
+            _buildActionButton(
+              icon: Icons.restart_alt,
+              label: 'Set Smart Pot Interval',
+              onPressed: _showIntervalDialog,
               isLoading: _isResetting,
               color: Colors.black,
             ),

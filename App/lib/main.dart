@@ -82,6 +82,7 @@ class _MainPageState extends State<MainPage> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isDialogShowing = false;
   String deviceIPAddress = '';
+  late Duration _fetchInterval;
 
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -91,13 +92,16 @@ class _MainPageState extends State<MainPage> {
     ),
   );
 
-  void _startImageFetching() {
+  Future<void> _startImageFetching() async {
     _timer?.cancel();
-    if (!_isDisposed) {
-      _fetchImage();
-    }
 
-    _timer = Timer.periodic(const Duration(seconds: 20), (timer) {
+    final prefs = await SharedPreferences.getInstance();
+    final savedSeconds = prefs.getInt('fetchIntervalSeconds') ?? 20;
+    setState(() {
+      _fetchInterval = Duration(seconds: savedSeconds);
+    });
+
+    _timer = Timer.periodic(_fetchInterval, (timer) {
       if (!_isDisposed) {
         _fetchImage();
       } else {
@@ -223,26 +227,49 @@ class _MainPageState extends State<MainPage> {
         smilingProbs.reduce((a, b) => a + b) / smilingProbs.length;
 
     String emotion;
-    if (windowAverage >= 0.8) {
+    if (windowAverage >= 0.08) {
       emotion = 'genuine happiness';
-    } else if (windowAverage >= 0.5) {
+    } else if (windowAverage >= 0.06) {
       emotion = 'moderate happiness';
-    } else if (windowAverage >= 0.2) {
-      emotion = 'uncomfortable';
-    } else {
-      emotion = 'sad';
-    }
+      if (!_isDialogShowing && mounted) {
+        _isDialogShowing = true;
 
-    if (!_isDialogShowing && mounted) {
-      _isDialogShowing = true;
+        final done = await showEmotionDialog(context, emotion, windowAverage);
 
-      final done = await showEmotionDialog(context, emotion, windowAverage);
-
-      if (mounted && done) {
-        setState(() {
-          _isDialogShowing = false;
-        });
+        if (mounted && done) {
+          setState(() {
+            _isDialogShowing = false;
+          });
+        }
       }
+    } else if (windowAverage >= 0.03) {
+      emotion = 'uncomfortable';
+      if (!_isDialogShowing && mounted) {
+        _isDialogShowing = true;
+
+        final done = await showEmotionDialog(context, emotion, windowAverage);
+
+        if (mounted && done) {
+          setState(() {
+            _isDialogShowing = false;
+          });
+        }
+      }
+    } else if (windowAverage >= 0) {
+      emotion = 'sad';
+      if (!_isDialogShowing && mounted) {
+        _isDialogShowing = true;
+
+        final done = await showEmotionDialog(context, emotion, windowAverage);
+
+        if (mounted && done) {
+          setState(() {
+            _isDialogShowing = false;
+          });
+        }
+      }
+    } else {
+      return;
     }
   }
 

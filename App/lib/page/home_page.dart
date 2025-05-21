@@ -133,7 +133,7 @@ class _HomePageState extends State<HomePage> {
         case 'genuine happiness':
           return Colors.yellow.shade100;
         case 'moderate happiness':
-          return Colors.blueAccent.shade100;
+          return Colors.blue.shade50;
         case 'uncomfortable':
           return Colors.green.shade50;
         default:

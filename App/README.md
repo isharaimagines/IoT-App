@@ -1,3 +1,7 @@
+# WellSync - IoT & AI Based Digital Wellness Assistant
+
+---
+
 # 📘 User Guide
 
 ## How to Set Up the IoT Device

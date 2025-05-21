@@ -18,6 +18,7 @@ class _MoodPageState extends State<MoodPage>
   late Animation<double> _animation;
   List<FlSpot> _moodData = [];
   double _maxY = 1.2;
+  int? _touchedIndex; // Store the index of the touched bar
 
   @override
   void initState() {
@@ -36,11 +37,18 @@ class _MoodPageState extends State<MoodPage>
   Future<void> _fetchMoodData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    final now = DateTime.now();
+    print(now);
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
 
     final snapshot = await FirebaseFirestore.instance
         .collection('recent')
         .doc(user.uid)
         .collection('activities')
+        .where('addtime',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('addtime', isLessThan: Timestamp.fromDate(endOfDay))
         .orderBy('addtime', descending: true)
         .get();
 
@@ -59,8 +67,8 @@ class _MoodPageState extends State<MoodPage>
         _moodData = data;
         // Inside _fetchMoodData after getting data
         _maxY = (data.isEmpty)
-            ? 1.05
-            : (data.map((spot) => spot.y).reduce(max) * 1.05);
+            ? 1.2
+            : (data.map((spot) => spot.y).reduce(max) * 1.2);
       });
       _controller.reset();
       _controller.forward();
@@ -69,22 +77,29 @@ class _MoodPageState extends State<MoodPage>
 
   Widget _buildTimeTitles(double value, TitleMeta meta) {
     final date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
-    return Text(
-      '${date.hour}:${date.minute.toString().padLeft(2, '0')}',
-      style: const TextStyle(fontSize: 10),
+    return Padding(
+      padding: const EdgeInsets.only(top: 8), // Add vertical spacing
+      child: Text(
+        '${date.hour}:${date.minute.toString().padLeft(2, '0')}',
+        style: const TextStyle(
+          color: Colors.grey,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 
   BarChartGroupData _makeBar(int index, FlSpot spot) {
     final double value = spot.y;
     final Color barColor;
+    final isTouched = index == _touchedIndex;
 
-    if (value >= 0.8) {
+    if (value >= 0.06) {
       barColor = Colors.yellow;
-    } else if (value >= 0.5) {
-      barColor = Colors.blueAccent;
-    } else if (value > 0.2) {
+    } else if (value >= 0.03) {
       barColor = Colors.greenAccent;
+    } else if (value >= 0) {
+      barColor = Colors.blueAccent;
     } else {
       barColor = Colors.blueGrey;
     }
@@ -94,9 +109,9 @@ class _MoodPageState extends State<MoodPage>
       barRods: [
         BarChartRodData(
           toY: value * _animation.value,
-          color: barColor,
-          width: 30,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(100)),
+          color: isTouched ? Colors.deepPurpleAccent : barColor,
+          width: 50,
+          borderRadius: BorderRadius.circular(100),
           backDrawRodData: BackgroundBarChartRodData(
             show: true,
             toY: _maxY,
@@ -133,48 +148,52 @@ class _MoodPageState extends State<MoodPage>
     return Scaffold(
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(18),
-        child: _moodData.isEmpty
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: 24),
 
-                  Center(
+            Center(
+              child: Text(
+                'Today',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+            Text(
+              'Today Insight',
+              style: TextStyle(
+                fontSize: 40,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Establishing consistent sleep patterns is essential for enhancing your overall well-being. By prioritizing a regular sleep schedule, you can significantly boost your mood and energy levels.',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Chart
+            _moodData.isEmpty
+                ? const Center(
                     child: Text(
-                      'Today',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.black,
-                      ),
+                      'No activities today',
                     ),
-                  ),
-
-                  const SizedBox(height: 20),
-                  Text(
-                    'Today Insight',
-                    style: TextStyle(
-                      fontSize: 40,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Establishing consistent sleep patterns is essential for enhancing your overall well-being. By prioritizing a regular sleep schedule, you can significantly boost your mood and energy levels.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Chart
-                  SizedBox(
+                  )
+                : SizedBox(
                     height: MediaQuery.of(context).size.height * 0.5,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       reverse: true,
                       child: SizedBox(
-                        width: _moodData.length * 40, // Adjust width per bar
+                        width: _moodData.length * 60, // Adjust width per bar
 
                         child: AnimatedBuilder(
                           animation: _animation,
@@ -183,26 +202,53 @@ class _MoodPageState extends State<MoodPage>
                               BarChartData(
                                 barTouchData: BarTouchData(
                                   enabled: true,
+                                  allowTouchBarBackDraw:
+                                      true, // Touch bar appears behind others
+
+                                  touchCallback: (FlTouchEvent event,
+                                      BarTouchResponse? response) {
+                                    if (response == null ||
+                                        response.spot == null) {
+                                      setState(() => _touchedIndex = null);
+                                      return;
+                                    }
+
+                                    setState(() {
+                                      if (event is FlTapCancelEvent ||
+                                          !event.isInterestedForInteractions) {
+                                        _touchedIndex = null;
+                                      } else {
+                                        _touchedIndex =
+                                            response.spot!.touchedBarGroupIndex;
+                                      }
+                                    });
+                                  },
                                   touchTooltipData: BarTouchTooltipData(
                                     getTooltipColor: (group) =>
-                                        Colors.grey.shade100,
+                                        Colors.deepPurpleAccent,
+
+                                    tooltipMargin: 5, // Distance from the bar
+                                    tooltipRoundedRadius: 8,
+                                    fitInsideHorizontally:
+                                        true, // Allow tooltip to go beyond bounds if needed
+                                    tooltipPadding: const EdgeInsets.all(8),
+                                    maxContentWidth: 120,
+
+                                    // tooltipPosition: TooltipPosition.right,
                                     getTooltipItem:
                                         (group, groupIndex, rod, rodIndex) {
                                       final date =
                                           DateTime.fromMillisecondsSinceEpoch(
                                               group.x.toInt());
                                       return BarTooltipItem(
-                                        '${date.hour}:${date.minute.toString().padLeft(2, '0')}\nInsight: ${rod.toY.toStringAsFixed(2)}',
+                                        '${date.hour}:${date.minute.toString().padLeft(2, '0')} Insight: ${rod.toY.toStringAsFixed(3)}',
                                         const TextStyle(
-                                          color: Colors.black,
+                                          color: Colors.white,
                                           fontSize: 12,
                                           height: 1.4,
                                         ),
                                       );
                                     },
-                                    maxContentWidth: 120,
-                                    fitInsideHorizontally: true,
-                                    tooltipPadding: const EdgeInsets.all(8),
                                   ),
                                 ),
                                 titlesData: FlTitlesData(
@@ -234,15 +280,7 @@ class _MoodPageState extends State<MoodPage>
                                   rightTitles: const AxisTitles(),
                                   topTitles: const AxisTitles(),
                                 ),
-                                borderData: FlBorderData(
-                                  show: true,
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: Colors.grey.shade300,
-                                      width: 1,
-                                    ),
-                                  ),
-                                ),
+                                borderData: FlBorderData(show: false),
                                 barGroups: _moodData
                                     .asMap()
                                     .entries
@@ -259,8 +297,8 @@ class _MoodPageState extends State<MoodPage>
                                 ),
                                 maxY: _maxY,
                                 minY: 0,
-                                alignment: BarChartAlignment.spaceAround,
-                                groupsSpace: 8,
+                                alignment: BarChartAlignment.start,
+                                groupsSpace: 2,
                                 backgroundColor: Colors.transparent,
                               ),
                             );
@@ -269,19 +307,21 @@ class _MoodPageState extends State<MoodPage>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  Row(
+            const SizedBox(height: 16),
+            _moodData.isEmpty
+                ? const SizedBox.shrink()
+                : Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildLegendItem(Colors.blueGrey, 'Sad'),
+                      _buildLegendItem(Colors.blueAccent, 'Sad'),
                       _buildLegendItem(Colors.greenAccent, 'Neutral'),
-                      _buildLegendItem(Colors.blueAccent, 'Happy'),
-                      _buildLegendItem(Colors.yellow, 'Joy'),
+                      _buildLegendItem(Colors.yellow, 'Happy'),
+                      _buildLegendItem(Colors.redAccent, 'Uncomfortable'),
+                      _buildLegendItem(Colors.deepPurpleAccent, 'Select'),
                     ],
                   )
-                ],
-              ),
+          ],
+        ),
       ),
     );
   }

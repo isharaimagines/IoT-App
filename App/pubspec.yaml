@@ -1,5 +1,5 @@
 name: iot_app
-description: "A new Flutter project."
+description: "WellSync - IoT & AI Based Digital Wellness Assistant"
 publish_to: "none"
 
 version: 1.0.0+1
@@ -12,10 +12,8 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  wifi_iot: ^0.3.19+2
   http: ^1.3.0
   permission_handler: ^12.0.0+1
-  connectivity_plus: ^6.1.4
   app_settings: ^6.1.1
   wifi_scan: ^0.4.1+2
   firebase_core: ^3.13.0
@@ -23,22 +21,15 @@ dependencies:
   google_sign_in: ^6.3.0
   shared_preferences: ^2.5.3
   network_info_plus: ^6.1.4
-  multicast_dns: ^0.3.3
-  network_tools: ^5.0.6
-  image_picker: ^1.1.2
-  image: ^4.5.4
   camera: ^0.11.1
-  flutter_foreground_task: ^9.1.0
   google_mlkit_face_detection: ^0.13.1
   cloud_firestore: ^5.6.7
   path_provider: ^2.1.5
   intl: ^0.20.2
-  flutter_svg: ^2.1.0
   google_generative_ai: ^0.4.7
   equatable: ^2.0.7
   flutter_markdown: ^0.7.7+1
   fl_chart: ^0.71.0
-  google_fonts: ^6.2.1
   audioplayers: ^6.4.0
   flutter_dotenv: ^5.2.1
   flutter_custom_clippers: ^2.1.0

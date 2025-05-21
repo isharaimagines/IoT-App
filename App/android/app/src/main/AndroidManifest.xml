@@ -30,9 +30,9 @@
 
 
     <application
-        android:label="iot_app"
+        android:label="WellSync"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_wellsync">
 
         <meta-data
             android:name="com.google.android.gms.version"

@@ -48,25 +48,25 @@ String getRandomImage() {
 }
 
 List<Color> _getGradientColors(double score) {
-  if (score >= 0.8) {
+  if (score >= 0.08) {
     return [
       Colors.yellowAccent,
       Colors.deepOrangeAccent
     ]; // bright and energetic
-  }
-  if (score >= 0.5) {
+  } else if (score >= 0.06) {
     return [Colors.blueAccent, Colors.greenAccent]; // fresh and cheerful
-  }
-  if (score >= 0.2) {
+  } else if (score >= 0.03) {
     return [Colors.green, Colors.cyan]; // calm and thoughtful
+  } else if (score >= 0) {
+    return [Colors.grey, Colors.blueGrey]; // subdued and neutral
+  } else {
+    return [Colors.grey, Colors.blueGrey];
   }
-  return [Colors.grey, Colors.blueGrey]; // subdued and neutral
 }
 
 Color _getScoreColor(double score) {
-  if (score > 0.6) return Colors.grey.shade100;
-  if (score >= 0.4) return Colors.grey.shade100;
-  return Colors.grey.shade100;
+  if (score > 0) return Colors.grey.shade100;
+  return Colors.black;
 }
 
 String _formatDuration(Duration duration) {
@@ -91,17 +91,17 @@ Future<void> _saveCurrentMeditation(
   String title;
   String about;
 
-  if (windowAverage >= 0.8) {
+  if (windowAverage >= 0.08) {
     tag = 'genuine happiness';
     title = 'You’re Glowing With Joy Today!';
     about =
         "You're radiating positivity today! Embrace this joyful energy and share it with the world. Keep doing what lifts your spirit — you're on a beautiful path.";
-  } else if (windowAverage >= 0.5) {
+  } else if (windowAverage >= 0.06) {
     tag = 'moderate happiness';
     title = 'Peaceful Pause — Your Balance Is Beautiful.';
     about =
         "You're steady and grounded right now. It’s a good time to breathe deeply, reflect, and recharge. Your calm presence is your strength.";
-  } else if (windowAverage >= 0.2) {
+  } else if (windowAverage >= 0.03) {
     tag = 'uncomfortable';
     title = "It's Okay To Feel Low — You’re Not Alone.";
     about =
@@ -139,7 +139,7 @@ Future<bool> showEmotionDialog(
 
   return await showDialog<bool>(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
       builder: (context) {
         bool isPlaying = true;
 
@@ -162,9 +162,7 @@ Future<bool> showEmotionDialog(
         return StatefulBuilder(
           builder: (context, setState) => WillPopScope(
             onWillPop: () async {
-              await _audioPlayer.stop();
-              await _saveCurrentMeditation(emotion, windowAverage);
-              return true;
+              return false;
             },
             child: Dialog(
               backgroundColor: Colors.transparent,
@@ -189,11 +187,7 @@ Future<bool> showEmotionDialog(
                             borderRadius: BorderRadius.circular(20),
                           ),
                         ),
-                        onPressed: () async {
-                          await _audioPlayer.stop();
-                          await _saveCurrentMeditation(emotion, windowAverage);
-                          Navigator.of(context).pop(true);
-                        },
+                        onPressed: () {},
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: const [
@@ -236,7 +230,7 @@ Future<bool> showEmotionDialog(
                     ),
                     const SizedBox(height: 15),
                     const Text(
-                      'Personalized Insights',
+                      'Personalized insights...',
                       style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -328,13 +322,37 @@ Future<bool> showEmotionDialog(
                     SizedBox(
                       width: double.maxFinite,
                       child: TextButton.icon(
-                        icon:
-                            const Icon(Icons.check_circle, color: Colors.white),
-                        label: const Text('Got it!',
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 18)),
+                        icon: ShaderMask(
+                          shaderCallback: (Rect bounds) {
+                            return LinearGradient(
+                              colors: _getGradientColors(windowAverage),
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ).createShader(bounds);
+                          },
+                          blendMode: BlendMode
+                              .srcATop, // Apply gradient to the icon's alpha channel
+                          child: const Icon(Icons.check_circle, size: 24),
+                        ),
+                        label: ShaderMask(
+                          shaderCallback: (Rect bounds) {
+                            return LinearGradient(
+                              colors: _getGradientColors(windowAverage),
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ).createShader(bounds);
+                          },
+                          blendMode: BlendMode.srcATop,
+                          child: const Text(
+                            'Got it',
+                            style: TextStyle(
+                              fontSize: 18,
+                              // Remove static color property
+                            ),
+                          ),
+                        ),
                         style: TextButton.styleFrom(
-                          backgroundColor: Colors.white24,
+                          backgroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(100),
                           ),
