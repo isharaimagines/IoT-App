@@ -125,7 +125,7 @@ lib/
 | Symptom                     | Resolution                                                    |
 | --------------------------- | ------------------------------------------------------------- |
 | **Missing Firebase Config** | Verify google-services.json file location                     |
-| **BLE Connection Drops**    | Check device proximity (<10m recommended)                     |
+| **WiFi Connection Drops**    | Check device proximity (<10m recommended)                     |
 | **UI Rendering Issues**     | Execute `flutter clean && ./gradlew clean && flutter pub get` |
 
 ---
